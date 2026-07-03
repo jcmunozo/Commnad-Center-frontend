@@ -1,0 +1,24 @@
+{
+  "app": { "title": "PMO Command Center" },
+  "nav": {
+    "dashboard": "Tablero",
+    "projects": "Proyectos",
+    "tasks": "Tareas",
+    "resources": "Recursos",
+    "tracking": "Seguimiento",
+    "admin": "Administración"
+  },
+  "auth": {
+    "login": "Iniciar sesión",
+    "username": "Usuario",
+    "password": "Contraseña",
+    "forgot": "¿Olvidaste tu contraseña?",
+    "reset": "Restablecer contraseña"
+  },
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "search": "Buscar",
+    "new": "Nuevo"
+  }
+}

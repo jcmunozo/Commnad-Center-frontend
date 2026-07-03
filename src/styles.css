@@ -1,0 +1,23 @@
+/* ---- Design tokens (Fase 4 §7.6) ---- */
+:root {
+  --pmo-primary: #2563eb;
+  --pmo-success: #16a34a;
+  --pmo-warn: #d97706;
+  --pmo-danger: #dc2626;
+  --health-green: #16a34a;
+  --health-yellow: #eab308;
+  --health-red: #dc2626;
+  --font-base: 'Inter', system-ui, sans-serif;
+  --space-unit: 8px;
+  --radius: 8px;
+  --surface-bg: #f7f8fa;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; font-family: var(--font-base); background: var(--surface-bg); color: #1f2937; }
+a { color: var(--pmo-primary); text-decoration: none; }
+
+.pmo-page { padding: calc(var(--space-unit) * 3); }
+.pmo-toolbar { display: flex; gap: var(--space-unit); align-items: center; margin-bottom: calc(var(--space-unit) * 2); }
+.pmo-grid { display: grid; gap: calc(var(--space-unit) * 2); }
+.pmo-grid--kpi { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
