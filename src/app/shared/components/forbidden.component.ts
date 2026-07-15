@@ -8,8 +8,8 @@ import { RouterLink } from '@angular/router';
   template: `
     <div style="padding:3rem;text-align:center">
       <h1>403</h1>
-      <p>No tienes permiso para acceder a esta sección.</p>
-      <a routerLink="/dashboard">Volver al tablero</a>
+      <p>You do not have permission to access this section.</p>
+      <a routerLink="/dashboard">Back to dashboard</a>
     </div>
   `,
 })

@@ -4,12 +4,22 @@ export interface PortfolioKpis {
   blocked_projects: number;
   open_tasks: number;
   overdue_tasks: number;
-  critical_risks: number;
+  overdue_subtasks: number;
   by_status: Record<string, number>;
+  by_task_status: Record<string, number>;
+  projects: {
+    id: string;
+    legacy_code: string | null;
+    name: string;
+    progress_pct: number;
+    health: string | null;
+  }[];
 }
 
 export interface PortfolioAlerts {
-  critical_risks: { id: string; project_id: string; description: string; probability: number; impact: number }[];
-  overdue_actions: { id: string; project_id: string; description: string; due_date: string }[];
+  overdue_subtasks: {
+    id: string; project_id: string; description: string; due_date: string;
+    task_code: string | null; task_name: string; assignee_name: string | null;
+  }[];
   overdue_milestones: { id: string; name: string; target_date: string; derived_status: string; avg_progress: number }[];
 }

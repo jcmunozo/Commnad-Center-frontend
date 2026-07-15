@@ -14,19 +14,19 @@ import { NotificationService } from '../../../core/services/notification.service
   imports: [ReactiveFormsModule, RouterLink, InputTextModule, PasswordModule, ButtonModule],
   template: `
     <form [formGroup]="form" (ngSubmit)="submit()" class="login-form">
-      <label>Usuario
+      <label>Username
         <input pInputText formControlName="username" autocomplete="username" />
       </label>
-      <label>Contraseña
+      <label>Password
         <p-password formControlName="password" [feedback]="false" [toggleMask]="true" styleClass="w-full" />
       </label>
-      <p-button type="submit" label="Iniciar sesión" [loading]="loading()" [disabled]="form.invalid" styleClass="w-full" />
-      <a routerLink="/auth/forgot-password" class="forgot">¿Olvidaste tu contraseña?</a>
+      <p-button type="submit" label="Sign in" [loading]="loading()" [disabled]="form.invalid" styleClass="w-full" />
+      <a routerLink="/auth/forgot-password" class="forgot">Forgot your password?</a>
     </form>
   `,
   styles: [`
     .login-form { display:flex; flex-direction:column; gap:1rem; }
-    label { display:flex; flex-direction:column; gap:.35rem; font-size:.85rem; color:#475569; }
+    label { display:flex; flex-direction:column; gap:.35rem; font-size:.85rem; color:var(--pmo-muted); }
     .forgot { text-align:center; font-size:.85rem; }
     :host ::ng-deep .w-full, :host ::ng-deep .w-full input { width:100%; }
   `],
@@ -50,7 +50,7 @@ export class LoginComponent {
     const { username, password } = this.form.getRawValue();
     this.auth.login(username, password).subscribe({
       next: () => this.router.navigate(['/dashboard']),
-      error: () => { this.loading.set(false); this.notify.error('Credenciales inválidas'); },
+      error: () => { this.loading.set(false); this.notify.error('Invalid credentials'); },
     });
   }
 }

@@ -1,11 +1,12 @@
 import { Component, Input } from '@angular/core';
 import { TagModule } from 'primeng/tag';
 
-const SEVERITY_MAP: Record<string, 'success' | 'info' | 'warning' | 'danger'> = {
-  LOW: 'info', MEDIUM: 'warning', HIGH: 'warning', CRITICAL: 'danger',
-  GREEN: 'success', YELLOW: 'warning', RED: 'danger',
+const SEVERITY_MAP: Record<string, 'success' | 'info' | 'warn' | 'danger'> = {
+  LOW: 'info', MEDIUM: 'warn', HIGH: 'warn', CRITICAL: 'danger',
+  GREEN: 'success', YELLOW: 'warn', RED: 'danger',
   DONE: 'success', COMPLETED: 'success', BLOCKED: 'danger', CANCELLED: 'danger',
   IN_PROGRESS: 'info',
+  WIP: 'info', PAUSED: 'warn', RESOLVED: 'success',
 };
 
 @Component({

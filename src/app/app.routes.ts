@@ -29,12 +29,16 @@ export const routes: Routes = [
           import('./features/projects/projects.routes').then((m) => m.PROJECT_ROUTES),
       },
       {
-        path: 'admin/import',
-        canActivate: [roleGuard([ROLES.ADMIN])],
+        path: 'tickets',
         loadComponent: () =>
-          import('./features/admin/excel-import/excel-import.component').then(
-            (m) => m.ExcelImportComponent,
-          ),
+          import('./features/tickets/ticket-list/ticket-list.component').then(
+            (m) => m.TicketListComponent),
+      },
+      {
+        path: 'team',
+        canActivate: [roleGuard([ROLES.ADMIN, ROLES.PM])],
+        loadComponent: () =>
+          import('./features/team/team.component').then((m) => m.TeamComponent),
       },
     ],
   },

@@ -11,13 +11,52 @@
   --space-unit: 8px;
   --radius: 8px;
   --surface-bg: #f7f8fa;
+  --pmo-surface: #ffffff;
+  --pmo-border: #e5e7eb;
+  --pmo-text: #1f2937;
+  --pmo-muted: #64748b;
+}
+
+/* Dark theme: `.app-dark` on <html> also switches every PrimeNG component
+   (see darkModeSelector in app.config). Zinc scale to match Aura dark. */
+.app-dark {
+  --pmo-primary: #60a5fa;
+  --pmo-success: #4ade80;
+  --pmo-warn: #fbbf24;
+  --pmo-danger: #f87171;
+  --health-green: #4ade80;
+  --health-yellow: #facc15;
+  --health-red: #f87171;
+  --surface-bg: #09090b;
+  --pmo-surface: #18181b;
+  --pmo-border: #27272a;
+  --pmo-text: #e4e4e7;
+  --pmo-muted: #a1a1aa;
 }
 
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; font-family: var(--font-base); background: var(--surface-bg); color: #1f2937; }
+html, body { height: 100%; margin: 0; font-family: var(--font-base); background: var(--surface-bg); color: var(--pmo-text); }
 a { color: var(--pmo-primary); text-decoration: none; }
 
 .pmo-page { padding: calc(var(--space-unit) * 3); }
 .pmo-toolbar { display: flex; gap: var(--space-unit); align-items: center; margin-bottom: calc(var(--space-unit) * 2); }
 .pmo-grid { display: grid; gap: calc(var(--space-unit) * 2); }
 .pmo-grid--kpi { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+
+/* ---- Diálogos de formulario (global): controles fluidos, sin scroll horizontal ---- */
+.p-dialog .p-dialog-content { overflow-x: hidden; }
+.form-grid input, .form-grid textarea,
+.dialog-form input, .dialog-form textarea,
+.field input, .field textarea { width: 100%; }
+.form-grid p-select, .form-grid p-multiselect,
+.dialog-form p-select, .dialog-form p-multiselect,
+.field p-select, .field p-multiselect { width: 100%; }
+.form-grid p-datepicker, .form-grid p-inputnumber,
+.dialog-form p-datepicker, .dialog-form p-inputnumber,
+.field p-datepicker, .field p-inputnumber { display: inline-flex; width: 100%; }
+.form-grid p-datepicker input, .form-grid p-inputnumber input,
+.dialog-form p-datepicker input, .dialog-form p-inputnumber input,
+.field p-datepicker input, .field p-inputnumber input { width: 100%; min-width: 0; }
+.form-grid .p-select, .form-grid .p-multiselect, .form-grid .p-datepicker, .form-grid .p-inputnumber,
+.dialog-form .p-select, .dialog-form .p-multiselect, .dialog-form .p-datepicker, .dialog-form .p-inputnumber,
+.field .p-select, .field .p-multiselect, .field .p-datepicker, .field .p-inputnumber { width: 100%; }

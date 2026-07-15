@@ -1,12 +1,15 @@
 {
-  "app": { "title": "PMO Command Center" },
+  "app": {
+    "title": "PMO Command Center"
+  },
   "nav": {
     "dashboard": "Tablero",
     "projects": "Proyectos",
     "tasks": "Tareas",
     "resources": "Recursos",
     "tracking": "Seguimiento",
-    "admin": "Administración"
+    "admin": "Administración",
+    "tickets": "Tickets"
   },
   "auth": {
     "login": "Iniciar sesión",
@@ -20,5 +23,16 @@
     "cancel": "Cancelar",
     "search": "Buscar",
     "new": "Nuevo"
+  },
+  "tickets": {
+    "title": "Tickets",
+    "number": "Nº ticket",
+    "name": "Nombre",
+    "status": "Estado",
+    "priority": "Prioridad",
+    "assignee": "Developer",
+    "investedHours": "Horas invertidas",
+    "new": "Nuevo ticket",
+    "edit": "Editar ticket"
   }
 }

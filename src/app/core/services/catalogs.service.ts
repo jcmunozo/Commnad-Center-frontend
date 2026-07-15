@@ -10,13 +10,18 @@ export interface CatalogItem {
   name: string;
   sort_order: number;
   is_active: boolean;
+  /** Solo catálogo shifts. */
+  start_hour?: number | null;
+  end_hour?: number | null;
+  /** Solo catálogo timezones (DecimalField serializado como string). */
+  utc_offset?: string;
 }
 
 const SLUGS = [
   'severity-levels', 'project-statuses', 'project-types', 'task-statuses', 'task-types',
   'health-statuses', 'risk-statuses', 'issue-statuses', 'milestone-statuses', 'action-statuses',
   'api-statuses', 'endpoint-statuses', 'http-methods', 'employee-levels', 'employee-statuses',
-  'locations', 'timezones', 'shifts', 'update-types', 'action-origins',
+  'locations', 'timezones', 'shifts', 'update-types', 'action-origins', 'ticket-statuses',
 ] as const;
 export type CatalogSlug = (typeof SLUGS)[number];
 

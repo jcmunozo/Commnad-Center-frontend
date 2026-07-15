@@ -14,8 +14,8 @@ import { RouterOutlet } from '@angular/router';
     </div>
   `,
   styles: [`
-    .auth-shell { min-height:100vh; display:grid; place-items:center; background:linear-gradient(135deg,#eef2ff,#f7f8fa); }
-    .auth-card { width:360px; background:#fff; padding:2rem; border-radius:var(--radius); box-shadow:0 10px 30px rgba(0,0,0,.08); }
+    .auth-shell { min-height:100vh; display:grid; place-items:center; background:var(--surface-bg); }
+    .auth-card { width:360px; background:var(--pmo-surface); padding:2rem; border-radius:var(--radius); box-shadow:0 10px 30px rgba(0,0,0,.08); }
     .auth-brand { font-size:1.25rem; margin:0 0 1.5rem; color:var(--pmo-primary); text-align:center; }
   `],
 })

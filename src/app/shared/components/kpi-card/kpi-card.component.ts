@@ -4,15 +4,18 @@ import { Component, Input } from '@angular/core';
   selector: 'app-kpi-card',
   standalone: true,
   template: `
-    <div class="kpi" [style.borderTopColor]="accent">
+    <div class="kpi" [style.borderLeftColor]="accent">
       <div class="kpi-value">{{ value }}</div>
       <div class="kpi-label">{{ label }}</div>
     </div>
   `,
   styles: [`
-    .kpi { background:#fff; border-radius:var(--radius); padding:1rem 1.25rem; border-top:3px solid var(--pmo-primary); box-shadow:0 1px 3px rgba(0,0,0,.06); }
-    .kpi-value { font-size:1.8rem; font-weight:700; color:#0f172a; }
-    .kpi-label { font-size:.8rem; color:#64748b; text-transform:uppercase; letter-spacing:.03em; }
+    .kpi { background:var(--pmo-surface); border-radius:var(--radius); padding:.9rem 1.1rem;
+      border:1px solid var(--pmo-border); border-left:4px solid var(--pmo-primary); }
+    .kpi-value { font-size:1.9rem; font-weight:700; color:var(--pmo-text);
+      font-variant-numeric:tabular-nums; line-height:1.2; }
+    .kpi-label { font-size:.72rem; color:var(--pmo-muted); text-transform:uppercase;
+      letter-spacing:.05em; margin-top:.15rem; }
   `],
 })
 export class KpiCardComponent {

@@ -1,9 +1,28 @@
+export interface ProjectPhase {
+  phase: PhaseCode;
+  planned_start: string | null;
+  planned_end: string | null;
+}
+
+export type PhaseCode = 'DEV' | 'SIT' | 'UAT' | 'PROD' | 'HYPERCARE';
+
+/** Orden y etiquetas del timeline de fases de entrega. */
+export const PROJECT_PHASES: { code: PhaseCode; label: string; hint: string }[] = [
+  { code: 'DEV', label: 'Dev', hint: 'Solution development and documentation' },
+  { code: 'SIT', label: 'SIT', hint: 'Pruebas entre sistemas' },
+  { code: 'UAT', label: 'UAT', hint: 'Pruebas con el cliente' },
+  { code: 'PROD', label: 'Prod', hint: 'Production go-live' },
+  { code: 'HYPERCARE', label: 'Hypercare', hint: 'Post-go-live support' },
+];
+
 export interface Project {
   id: string;
   legacy_code: string | null;
   name: string;
-  client: string;
-  client_name?: string;
+  description: string;
+  target_name: string;
+  trigger_name: string;
+  phases?: ProjectPhase[];
   project_type: string;
   status: string;
   priority: string;
@@ -23,7 +42,9 @@ export interface Project {
 export interface ProjectWrite {
   legacy_code?: string | null;
   name: string;
-  client: string;
+  description?: string;
+  target_name?: string;
+  trigger_name?: string;
   project_type: string;
   status: string;
   priority: string;
@@ -41,12 +62,8 @@ export interface ProjectDashboard {
   project_id: string;
   open_tasks: number;
   overdue_tasks: number;
-  open_issues: number;
-  open_risks: number;
-  critical_risks: number;
-  total_apis: number;
-  endpoints_total: number;
-  endpoints_done: number;
+  open_subtasks: number;
+  overdue_subtasks: number;
 }
 
 export interface ProjectProgress {
