@@ -9,6 +9,11 @@ import {
 export class ProjectService extends ApiBaseService<Project, ProjectWrite> {
   protected readonly path = 'projects';
 
+  /** Toggle the current user's favorite star on a project. */
+  favorite(id: string) {
+    return this.http.post<{ is_favorite: boolean }>(`${this.url}/${id}/favorite/`, {});
+  }
+
   dashboard(id: string) {
     return this.http.get<ProjectDashboard>(`${this.url}/${id}/dashboard/`);
   }

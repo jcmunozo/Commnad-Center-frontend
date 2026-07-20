@@ -29,6 +29,12 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
       <input pInputText placeholder="Search…" [(ngModel)]="searchTerm" (input)="onSearch()" />
       <p-select [options]="statusOptions" [(ngModel)]="statusFilter" (onChange)="onStatus()"
         placeholder="Status" [showClear]="true" optionLabel="name" optionValue="code" />
+      <button type="button" class="fav-filter" [class.fav-filter--on]="store.filters().favorite"
+        (click)="toggleFavoriteFilter()"
+        [title]="store.filters().favorite ? 'Showing favorites only' : 'Show favorites only'">
+        <i class="pi" [class.pi-star-fill]="store.filters().favorite"
+          [class.pi-star]="!store.filters().favorite"></i> Favorites
+      </button>
       <p-button label="New" icon="pi pi-plus" routerLink="/projects/new" />
     </div>
 
@@ -37,6 +43,7 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
       [loading]="store.loading()" [rowsPerPageOptions]="[10, 25, 50]" dataKey="id">
       <ng-template pTemplate="header">
         <tr>
+          <th style="width:2.5rem"></th>
           <th pSortableColumn="legacy_code">Code</th>
           <th pSortableColumn="name">Name</th>
           <th>Trigger</th>
@@ -50,6 +57,14 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
       </ng-template>
       <ng-template pTemplate="body" let-p>
         <tr>
+          <td>
+            <button type="button" class="star-btn" [class.star-btn--on]="p.is_favorite"
+              [title]="p.is_favorite ? 'Remove from favorites' : 'Add to favorites'"
+              (click)="toggleFavorite(p)">
+              <i class="pi" [class.pi-star-fill]="p.is_favorite"
+                [class.pi-star]="!p.is_favorite"></i>
+            </button>
+          </td>
           <td>{{ p.legacy_code }}</td>
           <td><a [routerLink]="['/projects', p.id]">{{ p.name }}</a></td>
           <td>{{ p.trigger_name || '—' }}</td>
@@ -68,7 +83,9 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td colspan="9">No projects.</td></tr>
+        <tr><td colspan="10">
+          {{ store.filters().favorite ? 'No favorite projects yet — star one with the ★ column.' : 'No projects.' }}
+        </td></tr>
       </ng-template>
     </p-table>
   `,
@@ -79,6 +96,16 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
     .icon-btn { background:none; border:none; cursor:pointer; color:var(--pmo-muted);
       padding:.25rem .4rem; font-size:.9rem; }
     .icon-btn--danger:hover { color:var(--pmo-danger); }
+    .star-btn { background:none; border:none; cursor:pointer; color:var(--pmo-muted);
+      padding:.25rem .3rem; font-size:.95rem; }
+    .star-btn:hover { color:#fab219; }
+    .star-btn--on { color:#fab219; }
+    .fav-filter { display:inline-flex; align-items:center; gap:.4rem; background:none;
+      cursor:pointer; border:1px solid var(--pmo-border); border-radius:var(--radius);
+      padding:.45rem .8rem; font-family:inherit; font-size:.85rem; color:var(--pmo-muted); }
+    .fav-filter:hover { border-color:#fab219; color:#fab219; }
+    .fav-filter--on { border-color:rgba(250,178,25,.6); color:#fab219;
+      background:rgba(250,178,25,.08); }
   `],
 })
 export class ProjectListComponent implements OnInit {
@@ -121,4 +148,16 @@ export class ProjectListComponent implements OnInit {
   }
 
   onStatus() { this.store.patchFilters({ status: this.statusFilter, page: 1 }); }
+
+  toggleFavoriteFilter() {
+    this.store.patchFilters({ favorite: !this.store.filters().favorite, page: 1 });
+  }
+
+  toggleFavorite(p: { id: string; is_favorite?: boolean }) {
+    this.service.favorite(p.id).subscribe(({ is_favorite }) => {
+      // update in place; the pinned-first order applies on the next load
+      this.store.items.update((rows) =>
+        rows.map((r) => (r.id === p.id ? { ...r, is_favorite } : r)));
+    });
+  }
 }

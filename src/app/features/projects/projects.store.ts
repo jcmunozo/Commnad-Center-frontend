@@ -8,13 +8,15 @@ export interface ProjectFilters {
   search: string;
   status: string | null;
   client: string | null;
+  favorite: boolean;
   page: number;
   page_size: number;
   ordering: string;
 }
 
 const DEFAULTS: ProjectFilters = {
-  search: '', status: null, client: null, page: 1, page_size: 25, ordering: 'name',
+  search: '', status: null, client: null, favorite: false,
+  page: 1, page_size: 25, ordering: 'name',
 };
 
 /** Feature-scoped state for the project list (signals, no NgRx). */
@@ -33,10 +35,12 @@ export class ProjectsStore {
     this.loading.set(true);
     const f = this.filters();
     const params: ListParams = {
-      page: f.page, page_size: f.page_size, ordering: f.ordering,
+      // favorites always pinned first; the user's column sort applies after
+      page: f.page, page_size: f.page_size, ordering: `-is_favorite,${f.ordering}`,
       search: f.search || undefined,
       status: f.status || undefined,
       client: f.client || undefined,
+      favorite: f.favorite || undefined,
     };
     this.service.list(params).subscribe({
       next: (page) => { this.items.set(page.results); this.total.set(page.count); this.loading.set(false); },

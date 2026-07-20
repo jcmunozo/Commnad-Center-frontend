@@ -22,6 +22,7 @@ const SLUGS = [
   'health-statuses', 'risk-statuses', 'issue-statuses', 'milestone-statuses', 'action-statuses',
   'api-statuses', 'endpoint-statuses', 'http-methods', 'employee-levels', 'employee-statuses',
   'locations', 'timezones', 'shifts', 'update-types', 'action-origins', 'ticket-statuses',
+  'leave-types',
 ] as const;
 export type CatalogSlug = (typeof SLUGS)[number];
 

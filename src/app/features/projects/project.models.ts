@@ -34,6 +34,7 @@ export interface Project {
   planned_hours: number | null;
   consumed_hours: number | null;
   comments: string;
+  is_favorite?: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;

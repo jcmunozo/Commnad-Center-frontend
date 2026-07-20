@@ -7,11 +7,11 @@ import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
-import { forkJoin, of, switchMap } from 'rxjs';
+import { forkJoin, switchMap } from 'rxjs';
 
 import { TeamService, WorkloadRow } from './team.service';
 import { EmployeeService } from './employee.service';
-import { ShiftClockComponent } from './shift-clock.component';
+import { DayShift, defaultWeek, ShiftWeekEditorComponent } from './shift-week-editor.component';
 import { TaskService } from '../projects/project-related.services';
 import { TicketService } from '../tickets/ticket.service';
 import { CatalogsService } from '../../core/services/catalogs.service';
@@ -25,14 +25,19 @@ const AVAILABILITY: Record<WorkloadRow['alert'], { label: string; code: string }
   OVERLOADED: { label: 'Overloaded', code: 'CRITICAL' },
 };
 
-const WEEKDAYS_MON_FRI = [1, 2, 3, 4, 5];
+// Banderas por código del catálogo Location (USA tiene dos entradas, una sola bandera).
+const FLAGS: Record<string, string> = {
+  COLOMBIA: '🇨🇴', PHILIPPINES: '🇵🇭', CHILE: '🇨🇱', ARGENTINA: '🇦🇷',
+  MEXICO: '🇲🇽', SPAIN: '🇪🇸', INDIA: '🇮🇳', USA_EAST: '🇺🇸', USA_WEST: '🇺🇸',
+  UK: '🇬🇧', BRAZIL: '🇧🇷',
+};
 
 @Component({
   selector: 'app-team',
   standalone: true,
   imports: [
     DecimalPipe, FormsModule, TableModule, ProgressBarModule, ButtonModule, DialogModule,
-    InputTextModule, SelectModule, StatusBadgeComponent, ShiftClockComponent,
+    InputTextModule, SelectModule, StatusBadgeComponent, ShiftWeekEditorComponent,
   ],
   template: `
     <div class="pmo-toolbar">
@@ -62,8 +67,29 @@ const WEEKDAYS_MON_FRI = [1, 2, 3, 4, 5];
           <td><button type="button" pButton class="p-button-text p-button-rounded"
             [pRowToggler]="r"><i class="pi" [class.pi-chevron-down]="expanded"
             [class.pi-chevron-right]="!expanded"></i></button></td>
-          <td>{{ r.name }}</td>
-          <td>{{ r.shift_today || '—' }}</td>
+          <td>
+            {{ r.name }}
+            @if (r.location) {
+              <div class="country-line" [title]="r.location_name">
+                <span class="flag">{{ flag(r.location) }}</span>{{ r.location_name }}
+              </div>
+            }
+          </td>
+          <td>
+            @if (r.on_leave_today) {
+              <span class="leave-pill" title="On leave today">
+                <i class="pi pi-calendar-minus"></i> On leave</span>
+            } @else if (r.holiday_today) {
+              <span class="holiday-pill" title="Public holiday in their country today">
+                <i class="pi pi-flag-fill"></i> Holiday</span>
+            } @else if (r.shift_today) {
+              <span class="shift-pill" [class.shift-pill--on]="r.on_shift_now"
+                [title]="r.on_shift_now ? 'On shift now' : 'Off shift'">
+                <span class="dot"></span>{{ r.shift_today }}</span>
+            } @else {
+              <span class="shift-off">Off</span>
+            }
+          </td>
           <td>{{ r.open_tasks }}</td>
           <td>{{ r.open_tickets }}</td>
           <td class="load-cell">
@@ -129,18 +155,22 @@ const WEEKDAYS_MON_FRI = [1, 2, 3, 4, 5];
         <label>Name *
           <input pInputText [(ngModel)]="formName" autocomplete="off" />
         </label>
+        <label>Country
+          <p-select [options]="locations()" optionLabel="name" optionValue="code"
+            [(ngModel)]="formLocation" [showClear]="true"
+            placeholder="Select" appendTo="body" />
+        </label>
         <label>Time zone
           <p-select [options]="timezones()" optionLabel="name" optionValue="code"
             [(ngModel)]="formTimezone" [showClear]="true"
             placeholder="Select" appendTo="body" />
         </label>
-        <label>Shift (Mon–Fri)</label>
-        <app-shift-clock [(start)]="formStart" [(duration)]="formDuration"
-          [tzOffset]="tzOffset()" />
+        <label>Weekly shifts</label>
+        <app-shift-week-editor #weekEditor [(days)]="formDays" />
       </div>
       <ng-template pTemplate="footer">
         <p-button label="Cancel" severity="secondary" (onClick)="dialogOpen.set(false)" />
-        <p-button label="Save" [disabled]="!formName.trim() || saving()"
+        <p-button label="Save" [disabled]="!formName.trim() || !weekEditor.valid() || saving()"
           [loading]="saving()" (onClick)="save()" />
       </ng-template>
     </p-dialog>
@@ -148,7 +178,28 @@ const WEEKDAYS_MON_FRI = [1, 2, 3, 4, 5];
   styles: [`
     .spacer { flex:1; }
     .load-cell { min-width:220px; }
+    .country-line { display:flex; align-items:center; gap:.35rem; margin-top:.2rem;
+      font-size:.72rem; color:var(--pmo-muted); white-space:nowrap; }
+    .country-line .flag { font-size:.9rem; line-height:1; }
     .load-label { font-size:.75rem; color:var(--pmo-muted); }
+    .shift-pill { display:inline-flex; align-items:center; gap:.45rem;
+      background:rgba(255,255,255,.05); border:1px solid var(--pmo-border);
+      border-radius:1rem; padding:.25rem .7rem; font-size:.82rem;
+      font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .shift-pill .dot { width:8px; height:8px; border-radius:50%;
+      background:var(--pmo-muted); flex-shrink:0; }
+    .shift-pill--on .dot { background:#22c55e; box-shadow:0 0 6px rgba(34,197,94,.7); }
+    .shift-off { color:var(--pmo-muted); font-size:.85rem; font-style:italic; }
+    .leave-pill { display:inline-flex; align-items:center; gap:.4rem;
+      background:rgba(250,178,25,.10); border:1px solid rgba(250,178,25,.45);
+      border-radius:1rem; padding:.25rem .7rem; font-size:.82rem; color:#fab219;
+      white-space:nowrap; }
+    .leave-pill .pi { font-size:.75rem; }
+    .holiday-pill { display:inline-flex; align-items:center; gap:.4rem;
+      background:rgba(57,135,229,.10); border:1px solid rgba(57,135,229,.45);
+      border-radius:1rem; padding:.25rem .7rem; font-size:.82rem; color:#7db2ec;
+      white-space:nowrap; }
+    .holiday-pill .pi { font-size:.75rem; }
     .expansion-cell { vertical-align:top; padding-top:.35rem; padding-bottom:.75rem; }
     .empty { color:var(--pmo-muted); margin:.25rem 0; font-size:.85rem; }
     .work-list { list-style:none; margin:.25rem 0; padding:0;
@@ -188,9 +239,14 @@ export class TeamComponent implements OnInit {
   readonly editingId = signal<string | null>(null);
   readonly saving = signal(false);
   formName = '';
-  readonly formStart = signal<number | null>(null);
-  readonly formDuration = signal<number>(9);
+  readonly formDays = signal<DayShift[]>(defaultWeek());
   formTimezone: string | null = null;
+  formLocation: string | null = null;
+
+  readonly locations = computed(() => this.catalogs.get('locations')
+    .map((l) => ({ code: l.code, name: `${FLAGS[l.code] ?? '🌐'} ${l.name}` })));
+
+  flag(code: string): string { return FLAGS[code] ?? '🌐'; }
 
   /** Solo las zonas donde opera el equipo (Colombia, Filipinas, Chile). */
   readonly timezones = computed(() => {
@@ -203,11 +259,6 @@ export class TeamComponent implements OnInit {
       .filter((t) => t.code in wanted)
       .map((t) => ({ ...t, name: wanted[t.code] }));
   });
-
-  tzOffset(): number | null {
-    const tz = this.catalogs.get('timezones').find((t) => t.code === this.formTimezone);
-    return tz?.utc_offset != null ? parseFloat(tz.utc_offset) : null;
-  }
 
   ngOnInit() { this.reload(); }
 
@@ -250,27 +301,32 @@ export class TeamComponent implements OnInit {
   openCreate() {
     this.editingId.set(null);
     this.formName = '';
-    this.formStart.set(9);
-    this.formDuration.set(9);
+    this.formDays.set(defaultWeek());
     this.formTimezone = null;
+    this.formLocation = null;
     this.dialogOpen.set(true);
   }
 
   openEdit(row: WorkloadRow) {
     this.editingId.set(row.employee_id);
     this.formName = row.name;
-    this.formStart.set(null);
-    this.formDuration.set(9);
+    this.formDays.set(defaultWeek().map((d) => ({ ...d, off: true })));
     this.formTimezone = null;
+    this.formLocation = row.location;
     this.dialogOpen.set(true);
     this.employees.schedule(row.employee_id).subscribe((rows) => {
       if (this.editingId() !== row.employee_id) return;
-      const first = rows[0];
-      if (first?.start_hour != null && first?.end_hour != null) {
-        this.formStart.set(first.start_hour);
-        const span = (first.end_hour - first.start_hour + 24) % 24;
-        this.formDuration.set(span === 0 ? 24 : span);
-      }
+      const byDay = new Map(rows.map((r) => [r.weekday, r]));
+      this.formDays.set(Array.from({ length: 7 }, (_, i) => {
+        const r = byDay.get(i + 1);
+        const hasHours = r?.start_hour != null && r?.end_hour != null;
+        return {
+          weekday: i + 1,
+          start: hasHours ? r!.start_hour! : null,
+          end: hasHours ? r!.end_hour! : null,
+          off: !hasHours,
+        };
+      }));
     });
     this.employees.get(row.employee_id).subscribe((emp) => {
       if (this.editingId() === row.employee_id) this.formTimezone = emp.timezone;
@@ -285,18 +341,20 @@ export class TeamComponent implements OnInit {
 
     // legacy_code lo autogenera el backend (EMP-NNN, viendo también inactivos).
     const upsert$ = id
-      ? this.employees.update(id, { name, timezone: this.formTimezone })
-      : this.employees.create({ name, status: 'ACTIVE', timezone: this.formTimezone });
+      ? this.employees.update(id, { name, timezone: this.formTimezone,
+          location: this.formLocation })
+      : this.employees.create({ name, status: 'ACTIVE', timezone: this.formTimezone,
+          location: this.formLocation });
 
     upsert$.pipe(
       switchMap((emp) => {
         const empId = id ?? emp.id;
-        const start = this.formStart();
-        if (start === null) return of(null);
-        const end = (start + this.formDuration()) % 24;
-        const rows = WEEKDAYS_MON_FRI.map((weekday) => ({
-          employee: empId, weekday, start_hour: start, end_hour: end,
-        }));
+        const rows = this.formDays()
+          .filter((d) => !d.off && d.start !== null && d.end !== null)
+          .map((d) => ({
+            employee: empId, weekday: d.weekday,
+            start_hour: d.start!, end_hour: d.end!,
+          }));
         return this.employees.saveSchedule(empId, rows);
       }),
     ).subscribe({

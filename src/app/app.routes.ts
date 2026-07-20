@@ -35,6 +35,11 @@ export const routes: Routes = [
             (m) => m.TicketListComponent),
       },
       {
+        path: 'leaves',
+        loadComponent: () =>
+          import('./features/leaves/leaves.component').then((m) => m.LeavesComponent),
+      },
+      {
         path: 'team',
         canActivate: [roleGuard([ROLES.ADMIN, ROLES.PM])],
         loadComponent: () =>

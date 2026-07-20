@@ -119,6 +119,7 @@ export class MainLayoutComponent {
     { label: 'Dashboard', icon: 'pi-chart-bar', route: '/dashboard' },
     { label: 'Projects', icon: 'pi-folder', route: '/projects' },
     { label: 'Tickets', icon: 'pi-ticket', route: '/tickets' },
+    { label: 'Leaves', icon: 'pi-calendar-minus', route: '/leaves' },
     { label: 'Team', icon: 'pi-users', route: '/team', roles: ['PMO Admin', 'Project Manager'] },
   ];
 
