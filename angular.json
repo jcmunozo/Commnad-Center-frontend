@@ -31,7 +31,11 @@
                 { "type": "anyComponentStyle", "maximumWarning": "4kb" }
               ],
               "outputHashing": "all",
-              "optimization": { "scripts": true, "styles": true, "fonts": false },
+              "optimization": {
+                "scripts": true,
+                "styles": { "minify": true, "inlineCritical": false },
+                "fonts": false
+              },
               "fileReplacements": [
                 {
                   "replace": "src/environments/environment.ts",
