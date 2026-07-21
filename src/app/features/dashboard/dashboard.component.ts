@@ -1,10 +1,13 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { NgApexchartsModule } from 'ng-apexcharts';
 
 import { DashboardService } from './dashboard.service';
 import { PortfolioAlerts, PortfolioKpis } from './dashboard.models';
 import { TeamService, WorkloadRow } from '../team/team.service';
+import { NoteService } from '../notes/note.service';
+import { Note, dueState } from '../notes/note.models';
 import { CatalogsService } from '../../core/services/catalogs.service';
 import { KpiCardComponent } from '../../shared/components/kpi-card/kpi-card.component';
 
@@ -35,7 +38,7 @@ const AXIS_LABELS = { style: { colors: '#a1a1aa' } };
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, NgApexchartsModule, KpiCardComponent],
+  imports: [DatePipe, DecimalPipe, RouterLink, NgApexchartsModule, KpiCardComponent],
   template: `
     <h2>Portfolio dashboard</h2>
 
@@ -108,6 +111,23 @@ const AXIS_LABELS = { style: { colors: '#a1a1aa' } };
       </div>
     }
 
+    @if (pinnedNotes().length) {
+      <div class="pinned-notes">
+        <h3><i class="pi pi-bookmark-fill"></i> Pinned notes</h3>
+        <ul>
+          @for (n of pinnedNotes(); track n.id) {
+            <li>
+              <a routerLink="/notes">{{ n.title }}</a>
+              @if (n.due_date) {
+                <span class="dim" [style.color]="dueColor(n)">
+                  · due {{ n.due_date | date:'dd MMM' }}</span>
+              }
+            </li>
+          }
+        </ul>
+      </div>
+    }
+
     @if (alerts(); as a) {
       <div class="alerts">
         <h3>Alerts</h3>
@@ -154,6 +174,14 @@ const AXIS_LABELS = { style: { colors: '#a1a1aa' } };
       margin-right:.3rem; }
     .alerts { margin-top:1.5rem; background:var(--pmo-surface); padding:1rem 1.5rem 1.25rem;
       border-radius:var(--radius); border:1px solid var(--pmo-border); }
+    .pinned-notes { margin-top:1.5rem; background:var(--pmo-surface); padding:1rem 1.5rem 1.25rem;
+      border-radius:var(--radius); border:1px solid var(--pmo-border); }
+    .pinned-notes h3 { margin:.25rem 0 .75rem; font-size:.95rem; }
+    .pinned-notes h3 i { color:var(--pmo-primary); margin-right:.4rem; }
+    .pinned-notes ul { margin:0; padding-left:1.1rem; }
+    .pinned-notes li { font-size:.85rem; margin-bottom:.3rem; }
+    .pinned-notes a { color:var(--pmo-text); text-decoration:none; }
+    .pinned-notes a:hover { color:var(--pmo-primary); }
     .alerts h3 { margin:.25rem 0 1rem; font-size:.95rem; }
     .alert-groups { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.25rem; }
     .alert-head { display:flex; align-items:center; gap:.5rem; margin-bottom:.5rem; }
@@ -166,11 +194,17 @@ const AXIS_LABELS = { style: { colors: '#a1a1aa' } };
 export class DashboardComponent implements OnInit {
   private readonly service = inject(DashboardService);
   private readonly team = inject(TeamService);
+  private readonly notes = inject(NoteService);
   private readonly catalogs = inject(CatalogsService);
 
   readonly kpis = signal<PortfolioKpis | null>(null);
   readonly alerts = signal<PortfolioAlerts | null>(null);
   readonly workload = signal<WorkloadRow[]>([]);
+  readonly pinnedNotes = signal<Note[]>([]);
+
+  dueColor(n: Note) {
+    return dueState(n) === 'overdue' ? CRITICAL : 'var(--pmo-muted)';
+  }
 
   // Opciones compartidas de las barras (marcas finas, extremos redondeados 4px).
   readonly grid = BASE_GRID;
@@ -235,5 +269,10 @@ export class DashboardComponent implements OnInit {
       next: (rows) => this.workload.set(rows),
       error: () => this.workload.set([]),
     });
+    this.notes.list({ pinned: true, status: 'OPEN', page_size: 6, ordering: '-created_at' })
+      .subscribe({
+        next: (page) => this.pinnedNotes.set(page.results),
+        error: () => this.pinnedNotes.set([]),
+      });
   }
 }

@@ -1,10 +1,10 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { tap } from 'rxjs';
+import { finalize, Observable, shareReplay, tap } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
-import { CurrentUser, TokenPair } from './auth.models';
+import { CurrentUser, RefreshResponse, TokenPair } from './auth.models';
 
 const ACCESS_KEY = 'pmo_access';
 const REFRESH_KEY = 'pmo_refresh';
@@ -38,10 +38,27 @@ export class AuthStore {
     );
   }
 
+  /** In-flight refresh, shared so concurrent 401s trigger a single request.
+   * The backend rotates + blacklists refresh tokens, so a second parallel
+   * refresh with the same (now dead) token would force a logout. */
+  private refresh$: Observable<RefreshResponse> | null = null;
+
   refresh() {
-    return this.http
-      .post<{ access: string }>(`${this.base}/auth/token/refresh/`, { refresh: this.refreshToken() })
-      .pipe(tap(({ access }) => this.setAccess(access)));
+    this.refresh$ ??= this.http
+      .post<RefreshResponse>(`${this.base}/auth/token/refresh/`, { refresh: this.refreshToken() })
+      .pipe(
+        tap((tokens) => {
+          this.setAccess(tokens.access);
+          // ROTATE_REFRESH_TOKENS: keep the rotated token or ours dies too.
+          if (tokens.refresh) {
+            this.refreshToken.set(tokens.refresh);
+            localStorage.setItem(REFRESH_KEY, tokens.refresh);
+          }
+        }),
+        finalize(() => (this.refresh$ = null)),
+        shareReplay(1),
+      );
+    return this.refresh$;
   }
 
   loadUser() {
