@@ -23,6 +23,7 @@
     "primeicons": "^7.0.0",
     "ng-apexcharts": "^1.17.0",
     "apexcharts": "^4.0.0",
+    "flag-icons": "^7.5.0",
     "frappe-gantt": "^0.6.1",
     "rxjs": "~7.8.0",
     "tslib": "^2.6.0",

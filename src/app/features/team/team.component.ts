@@ -25,11 +25,13 @@ const AVAILABILITY: Record<WorkloadRow['alert'], { label: string; code: string }
   OVERLOADED: { label: 'Overloaded', code: 'CRITICAL' },
 };
 
-// Banderas por código del catálogo Location (USA tiene dos entradas, una sola bandera).
-const FLAGS: Record<string, string> = {
-  COLOMBIA: '🇨🇴', PHILIPPINES: '🇵🇭', CHILE: '🇨🇱', ARGENTINA: '🇦🇷',
-  MEXICO: '🇲🇽', SPAIN: '🇪🇸', INDIA: '🇮🇳', USA_EAST: '🇺🇸', USA_WEST: '🇺🇸',
-  UK: '🇬🇧', BRAZIL: '🇧🇷',
+// Banderas por código del catálogo Location (USA tiene dos entradas, un solo país ISO).
+// SVG vía flag-icons (no depende de la fuente emoji del SO — Windows no renderiza
+// banderas emoji y muestra el código de país como texto plano).
+const ISO2: Record<string, string> = {
+  COLOMBIA: 'co', PHILIPPINES: 'ph', CHILE: 'cl', ARGENTINA: 'ar',
+  MEXICO: 'mx', SPAIN: 'es', INDIA: 'in', USA_EAST: 'us', USA_WEST: 'us',
+  UK: 'gb', BRAZIL: 'br',
 };
 
 @Component({
@@ -71,7 +73,7 @@ const FLAGS: Record<string, string> = {
             {{ r.name }}
             @if (r.location) {
               <div class="country-line" [title]="r.location_name">
-                <span class="flag">{{ flag(r.location) }}</span>{{ r.location_name }}
+                <span [class]="flagClass(r.location)"></span>{{ r.location_name }}
               </div>
             }
           </td>
@@ -158,7 +160,20 @@ const FLAGS: Record<string, string> = {
         <label>Country
           <p-select [options]="locations()" optionLabel="name" optionValue="code"
             [(ngModel)]="formLocation" [showClear]="true"
-            placeholder="Select" appendTo="body" />
+            placeholder="Select" appendTo="body">
+            <ng-template pTemplate="selectedItem" let-opt>
+              @if (opt) {
+                <span class="select-flag-row">
+                  <span [class]="flagClass(opt.code)"></span>{{ opt.name }}
+                </span>
+              }
+            </ng-template>
+            <ng-template pTemplate="item" let-opt>
+              <span class="select-flag-row">
+                <span [class]="flagClass(opt.code)"></span>{{ opt.name }}
+              </span>
+            </ng-template>
+          </p-select>
         </label>
         <label>Time zone
           <p-select [options]="timezones()" optionLabel="name" optionValue="code"
@@ -180,7 +195,11 @@ const FLAGS: Record<string, string> = {
     .load-cell { min-width:220px; }
     .country-line { display:flex; align-items:center; gap:.35rem; margin-top:.2rem;
       font-size:.72rem; color:var(--pmo-muted); white-space:nowrap; }
-    .country-line .flag { font-size:.9rem; line-height:1; }
+    .select-flag-row { display:flex; align-items:center; gap:.5rem; }
+    .country-line .fi, .select-flag-row .fi {
+      width:1.2em; height:.9em; border-radius:2px; flex:none;
+      box-shadow:0 0 0 1px rgba(255,255,255,.08);
+    }
     .load-label { font-size:.75rem; color:var(--pmo-muted); }
     .shift-pill { display:inline-flex; align-items:center; gap:.45rem;
       background:rgba(255,255,255,.05); border:1px solid var(--pmo-border);
@@ -244,9 +263,12 @@ export class TeamComponent implements OnInit {
   formLocation: string | null = null;
 
   readonly locations = computed(() => this.catalogs.get('locations')
-    .map((l) => ({ code: l.code, name: `${FLAGS[l.code] ?? '🌐'} ${l.name}` })));
+    .map((l) => ({ code: l.code, name: l.name })));
 
-  flag(code: string): string { return FLAGS[code] ?? '🌐'; }
+  flagClass(code: string): string {
+    const iso = ISO2[code];
+    return iso ? `fi fi-${iso}` : 'pi pi-globe';
+  }
 
   /** Solo las zonas donde opera el equipo (Colombia, Filipinas, Chile). */
   readonly timezones = computed(() => {

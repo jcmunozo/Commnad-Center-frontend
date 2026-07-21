@@ -20,6 +20,7 @@
             "assets": ["src/favicon.ico", "src/assets"],
             "styles": [
               "node_modules/primeicons/primeicons.css",
+              "node_modules/flag-icons/css/flag-icons.min.css",
               "src/styles.css"
             ],
             "scripts": []
