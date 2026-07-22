@@ -79,8 +79,9 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
       </label>
 
       <label>Progress %
-        <p-inputNumber formControlName="progress_pct" [min]="0" [max]="1" mode="decimal"
-          [minFractionDigits]="2" [maxFractionDigits]="4" />
+        <p-inputNumber formControlName="progress_pct" [min]="0" [max]="100" suffix="%"
+          [minFractionDigits]="0" [maxFractionDigits]="2" />
+        @if (invalid('progress_pct')) { <small class="err">Debe estar entre 0 y 100</small> }
       </label>
 
       @if (form.errors?.['endBeforeStart']) {
@@ -144,7 +145,7 @@ export class ProjectFormComponent implements OnInit {
       health: [null as string | null],
       start_date: [null as Date | null],
       planned_end: [null as Date | null],
-      progress_pct: [0, [Validators.min(0), Validators.max(1)]],
+      progress_pct: [0, [Validators.min(0), Validators.max(100)]],
       phases: this.fb.group(
         Object.fromEntries(PROJECT_PHASES.map((ph) => [
           ph.code,
@@ -164,6 +165,7 @@ export class ProjectFormComponent implements OnInit {
           health: p.health,
           start_date: p.start_date ? new Date(p.start_date) : null,
           planned_end: p.planned_end ? new Date(p.planned_end) : null,
+          progress_pct: Math.round((p.progress_pct ?? 0) * 100 * 100) / 100,
         }),
       );
       this.service.phases(id).subscribe((rows) => {
@@ -190,6 +192,7 @@ export class ProjectFormComponent implements OnInit {
       ...raw,
       start_date: raw.start_date ? raw.start_date.toISOString() : null,
       planned_end: raw.planned_end ? raw.planned_end.toISOString() : null,
+      progress_pct: Math.round(raw.progress_pct) / 100,
     };
     const phaseRows: ProjectPhase[] = this.phaseDefs
       .map((ph) => ({ code: ph.code, ...phases[ph.code] }))
