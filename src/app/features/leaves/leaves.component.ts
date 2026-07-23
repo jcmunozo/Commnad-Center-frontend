@@ -82,11 +82,6 @@ function iso(d: Date): string {
             }
           }
         </div>
-        <p class="cal-legend">
-          <span class="chip chip--busy">Some on leave</span>
-          <span class="chip chip--warn">Over {{ thresholdLabel() }} of team out</span>
-          <span class="chip chip--holiday">Public holiday</span>
-        </p>
       </section>
 
       <aside class="day-card">
@@ -117,6 +112,11 @@ function iso(d: Date): string {
         } @else {
           <p class="empty">Select a day to see who is out.</p>
         }
+        <p class="cal-legend">
+          <span class="chip chip--busy">Some on leave</span>
+          <span class="chip chip--holiday">Public holiday</span>
+          <span class="chip chip--warn">Over {{ thresholdLabel() }} of team out</span>
+        </p>
       </aside>
     </div>
 
@@ -286,22 +286,28 @@ function iso(d: Date): string {
     .cal-holiday .pi { font-size:.58rem; }
     .cal-count { font-size:.66rem; color:var(--pmo-muted); white-space:nowrap; }
     .cal-day--warn .cal-count { color:#e07a7a; }
-    .cal-legend { display:flex; gap:.6rem; margin:.75rem 0 0; }
-    .chip { font-size:.7rem; padding:.15rem .6rem; border-radius:1rem; border:1px solid; }
-    .chip--busy { border-color:rgba(250,178,25,.55); color:#fab219; }
-    .chip--warn { border-color:rgba(208,59,59,.6); color:#e07a7a; }
-    .chip--holiday { border-color:rgba(57,135,229,.55); color:#7db2ec; }
+    .cal-legend { display:flex; flex-direction:column; gap:.5rem;
+      margin:1.25rem 0 0; padding-top:1rem; border-top:1px solid var(--pmo-border); }
+    .chip { display:inline-flex; align-items:center; gap:.5rem; font-size:.78rem; font-weight:600; }
+    .chip::before { content:''; width:7px; height:7px; border-radius:50%;
+      background:currentColor; flex-shrink:0; }
+    .chip--busy { color:#fab219; }
+    .chip--warn { color:#e07a7a; }
+    .chip--holiday { color:#7db2ec; }
 
-    .day-card h3 { margin:0 0 .5rem; font-size:.95rem; }
+    .day-card h3 { margin:0 0 .6rem; font-size:.95rem; }
     .holiday-line { display:flex; align-items:center; gap:.4rem; font-size:.82rem;
       color:#7db2ec; margin:0 0 .6rem; }
-    .day-summary { font-size:.85rem; color:var(--pmo-muted); margin:0 0 .75rem; }
+    .day-summary { font-size:.85rem; color:var(--pmo-muted); margin:0 0 .85rem; }
     .day-summary--warn { color:#e07a7a; font-weight:600; }
     .absent-list { list-style:none; margin:0; padding:0; display:flex;
-      flex-direction:column; gap:.5rem; }
-    .absent-list li { display:flex; justify-content:space-between; gap:.5rem;
-      font-size:.85rem; }
-    .absent-type { color:var(--pmo-muted); font-size:.75rem; }
+      flex-direction:column; gap:.4rem; }
+    .absent-list li { display:flex; justify-content:space-between; align-items:center;
+      gap:.5rem; font-size:.85rem; padding:.5rem .65rem; border-radius:8px;
+      background:rgba(255,255,255,.03); }
+    .absent-name { font-weight:500; }
+    .absent-type { color:var(--pmo-muted); font-size:.7rem; white-space:nowrap;
+      padding:.15rem .55rem; border-radius:1rem; background:rgba(255,255,255,.05); }
     .empty { color:var(--pmo-muted); font-size:.85rem; }
 
     .table-title { margin:1.5rem 0 .75rem; font-size:1rem; }

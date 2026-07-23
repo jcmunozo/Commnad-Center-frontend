@@ -66,7 +66,8 @@ const ISO2: Record<string, string> = {
       </ng-template>
       <ng-template pTemplate="body" let-r let-expanded="expanded">
         <tr>
-          <td><button type="button" pButton class="p-button-text p-button-rounded"
+          <td><button type="button" pButton class="p-button-text p-button-rounded subtask-toggle"
+            [class.subtask-toggle--active]="r.open_tasks"
             [pRowToggler]="r"><i class="pi" [class.pi-chevron-down]="expanded"
             [class.pi-chevron-right]="!expanded"></i></button></td>
           <td>
@@ -209,6 +210,8 @@ const ISO2: Record<string, string> = {
       background:var(--pmo-muted); flex-shrink:0; }
     .shift-pill--on .dot { background:#22c55e; box-shadow:0 0 6px rgba(34,197,94,.7); }
     .shift-off { color:var(--pmo-muted); font-size:.85rem; font-style:italic; }
+    .subtask-toggle { color:var(--pmo-muted); }
+    .subtask-toggle--active { color:#22c55e; }
     .leave-pill { display:inline-flex; align-items:center; gap:.4rem;
       background:rgba(250,178,25,.10); border:1px solid rgba(250,178,25,.45);
       border-radius:1rem; padding:.25rem .7rem; font-size:.82rem; color:#fab219;

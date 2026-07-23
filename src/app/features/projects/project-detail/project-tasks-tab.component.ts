@@ -8,10 +8,11 @@ import { SelectModule } from 'primeng/select';
 import { InputTextModule } from 'primeng/inputtext';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { DatePickerModule } from 'primeng/datepicker';
+import { TagModule } from 'primeng/tag';
 import { of, switchMap } from 'rxjs';
 
-import { TaskService } from '../project-related.services';
-import { Task } from '../project-related.models';
+import { SubTaskService, TaskService } from '../project-related.services';
+import { SubTask, Task } from '../project-related.models';
 import { Employee, EmployeeService } from '../../team/employee.service';
 import { CatalogsService } from '../../../core/services/catalogs.service';
 import { NotificationService } from '../../../core/services/notification.service';
@@ -36,7 +37,8 @@ interface TaskForm {
   standalone: true,
   imports: [
     DatePipe, DecimalPipe, FormsModule, TableModule, ButtonModule, DialogModule,
-    SelectModule, InputTextModule, InputNumberModule, DatePickerModule, StatusBadgeComponent,
+    SelectModule, InputTextModule, InputNumberModule, DatePickerModule, TagModule,
+    StatusBadgeComponent,
   ],
   template: `
     @if (canWrite()) {
@@ -46,11 +48,14 @@ interface TaskForm {
     }
 
     <p-table [value]="tasks()" [loading]="loading()" [paginator]="tasks().length > 10"
-      [rows]="10" dataKey="id" sortField="planned_end" [sortOrder]="1">
+      [rows]="10" dataKey="id" sortField="planned_end" [sortOrder]="1"
+      [expandedRowKeys]="expanded()" (onRowExpand)="loadSubtasks($event.data)">
       <ng-template pTemplate="header">
         <tr>
+          <th style="width:2.5rem"></th>
           <th>Code</th>
           <th pSortableColumn="name">Name</th>
+          <th style="width:4rem">Subtasks</th>
           <th>Type</th>
           <th>Dev</th>
           <th>Status</th>
@@ -60,10 +65,22 @@ interface TaskForm {
           @if (canWrite()) { <th style="width:7rem"></th> }
         </tr>
       </ng-template>
-      <ng-template pTemplate="body" let-t>
+      <ng-template pTemplate="body" let-t let-expanded="expanded">
         <tr>
+          <td>
+            <button type="button" pButton class="p-button-text p-button-rounded subtask-toggle"
+              [class.subtask-toggle--active]="t.subtask_count"
+              [pRowToggler]="t" [title]="(t.subtask_count || 0) + ' linked subtask(s)'">
+              <i class="pi" [class.pi-chevron-down]="expanded"
+                [class.pi-chevron-right]="!expanded"></i>
+            </button>
+          </td>
           <td>{{ t.legacy_code }}</td>
           <td>{{ t.name }}</td>
+          <td>
+            <p-tag [value]="(t.subtask_count || 0).toString()"
+              [severity]="t.subtask_count ? 'success' : 'secondary'" styleClass="subtask-tag" />
+          </td>
           <td>{{ catalogs.label('task-types', t.task_type) }}</td>
           <td class="dev-cell">
             <span>{{ assigneeNames(t) || '—' }}</span>
@@ -86,8 +103,35 @@ interface TaskForm {
           }
         </tr>
       </ng-template>
+      <ng-template pTemplate="expandedrow" let-t>
+        <tr class="expansion">
+          <td></td>
+          <td></td>
+          <td></td>
+          <td [attr.colspan]="canWrite() ? 8 : 7" class="expansion-cell">
+            @if (subtasksByTask()[t.id]; as subs) {
+              @if (subs.length) {
+                <ul class="subtask-list">
+                  @for (s of subs; track s.id) {
+                    <li>
+                      <app-status-badge [code]="s.status" [label]="catalogs.label('action-statuses', s.status)" />
+                      {{ s.description }}
+                      @if (s.assignee_name) { <span class="dim">· {{ s.assignee_name }}</span> }
+                      @if (s.due_date) { <span class="dim">· due {{ s.due_date | date }}</span> }
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p class="empty">No linked subtasks.</p>
+              }
+            } @else {
+              <p class="empty">Loading…</p>
+            }
+          </td>
+        </tr>
+      </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td [attr.colspan]="canWrite() ? 9 : 8">This project has no tasks.</td></tr>
+        <tr><td [attr.colspan]="canWrite() ? 11 : 10">This project has no tasks.</td></tr>
       </ng-template>
     </p-table>
 
@@ -176,6 +220,16 @@ interface TaskForm {
     .span-2 { grid-column:span 2; }
     textarea { resize:vertical; font:inherit; }
     .hint { display:block; margin-top:.75rem; color:var(--pmo-warn); font-size:.78rem; }
+    .subtask-toggle { color:var(--pmo-muted); }
+    .subtask-toggle--active { color:#22c55e; }
+    .subtask-tag { box-sizing:border-box !important; display:inline-block !important;
+      width:1.6rem !important; height:1.6rem !important; padding:0 !important;
+      border-radius:50% !important; line-height:1.6rem !important; text-align:center !important; }
+    .expansion-cell { padding:.5rem 1rem; }
+    .subtask-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.4rem; }
+    .subtask-list li { display:flex; align-items:center; gap:.5rem; font-size:.85rem; }
+    .dim { color:var(--pmo-muted); }
+    .empty { margin:0; color:var(--pmo-muted); font-size:.85rem; }
   `],
 })
 export class ProjectTasksTabComponent implements OnInit {
@@ -185,6 +239,7 @@ export class ProjectTasksTabComponent implements OnInit {
   readonly changed = output<void>();
 
   private readonly service = inject(TaskService);
+  private readonly subtaskService = inject(SubTaskService);
   private readonly employees = inject(EmployeeService);
   private readonly notify = inject(NotificationService);
   private readonly auth = inject(AuthStore);
@@ -193,6 +248,8 @@ export class ProjectTasksTabComponent implements OnInit {
   readonly tasks = signal<Task[]>([]);
   readonly loading = signal(true);
   readonly devs = signal<Employee[]>([]);
+  readonly expanded = signal<Record<string, boolean>>({});
+  readonly subtasksByTask = signal<Record<string, SubTask[]>>({});
 
   readonly canWrite = computed(() =>
     this.auth.hasAnyRole(['PMO Admin', 'Project Manager', 'Team Member']));
@@ -225,11 +282,19 @@ export class ProjectTasksTabComponent implements OnInit {
       .subscribe({
         next: (page) => {
           this.tasks.set(page.results);
+          this.subtasksByTask.set({});
           this.loading.set(false);
           this.count.emit(page.count);
         },
         error: () => this.loading.set(false),
       });
+  }
+
+  loadSubtasks(task: Task) {
+    if (this.subtasksByTask()[task.id]) return;
+    this.subtaskService.list({ task: task.id, page_size: 200 }).subscribe((page) => {
+      this.subtasksByTask.update((m) => ({ ...m, [task.id]: page.results }));
+    });
   }
 
   private ensureLookups() {

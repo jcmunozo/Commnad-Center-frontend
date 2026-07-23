@@ -17,6 +17,7 @@ export interface Task {
   planned_end: string | null;
   progress_pct: number;
   assignees?: TaskAssignee[];
+  subtask_count?: number;
 }
 
 export interface Milestone {

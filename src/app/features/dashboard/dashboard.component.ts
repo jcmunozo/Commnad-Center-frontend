@@ -241,7 +241,7 @@ export class DashboardComponent implements OnInit {
   readonly progress = computed(() => {
     const projects = this.kpis()?.projects ?? [];
     return {
-      labels: projects.map((p) => p.legacy_code || p.name),
+      labels: projects.map((p) => p.name),
       values: projects.map((p) => Math.round(p.progress_pct * 100)),
       colors: projects.map((p) => HEALTH_COLOR[p.health ?? ''] ?? NEUTRAL),
     };
