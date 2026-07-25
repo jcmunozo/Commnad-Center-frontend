@@ -1,5 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TableModule } from 'primeng/table';
 import { ProgressBarModule } from 'primeng/progressbar';
@@ -7,6 +7,7 @@ import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
+import { DatePickerModule } from 'primeng/datepicker';
 import { forkJoin, switchMap } from 'rxjs';
 
 import { TeamService, WorkloadRow } from './team.service';
@@ -38,8 +39,8 @@ const ISO2: Record<string, string> = {
   selector: 'app-team',
   standalone: true,
   imports: [
-    DecimalPipe, FormsModule, TableModule, ProgressBarModule, ButtonModule, DialogModule,
-    InputTextModule, SelectModule, StatusBadgeComponent, ShiftWeekEditorComponent,
+    DatePipe, DecimalPipe, FormsModule, TableModule, ProgressBarModule, ButtonModule, DialogModule,
+    InputTextModule, SelectModule, DatePickerModule, StatusBadgeComponent, ShiftWeekEditorComponent,
   ],
   template: `
     <div class="pmo-toolbar">
@@ -47,6 +48,32 @@ const ISO2: Record<string, string> = {
       <span class="spacer"></span>
       @if (canManage()) {
         <p-button label="New developer" icon="pi pi-user-plus" (onClick)="openCreate()" />
+      }
+    </div>
+
+    <div class="period-bar">
+      <span class="period-label">Load for:</span>
+      <p-button label="Current week" size="small"
+        [severity]="service.period() ? 'secondary' : 'primary'"
+        [outlined]="!!service.period()" (onClick)="clearPeriod()" />
+      <p-button label="2-week sprint" size="small" severity="secondary" outlined
+        icon="pi pi-bolt" (onClick)="applyPreset(14)" />
+      <p-button label="15-day sprint" size="small" severity="secondary" outlined
+        icon="pi pi-bolt" (onClick)="applyPreset(15)" />
+      <span class="period-custom">
+        <p-datepicker [(ngModel)]="service.periodStart" dateFormat="yy-mm-dd"
+          placeholder="Sprint start" [showIcon]="true" appendTo="body" />
+        <span class="period-sep">–</span>
+        <p-datepicker [(ngModel)]="service.periodEnd" dateFormat="yy-mm-dd"
+          placeholder="Sprint end" [showIcon]="true" [minDate]="service.periodStart" appendTo="body" />
+        <p-button label="Apply" size="small" [disabled]="!service.periodStart || !service.periodEnd"
+          (onClick)="applyCustomPeriod()" />
+      </span>
+      @if (service.period(); as p) {
+        <span class="period-active">
+          {{ p.start | date:'MMM d' }} – {{ p.end | date:'MMM d' }}
+          ({{ workdaySpan() }} working days)
+        </span>
       }
     </div>
 
@@ -193,6 +220,14 @@ const ISO2: Record<string, string> = {
   `,
   styles: [`
     .spacer { flex:1; }
+    .period-bar { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
+      margin:.25rem 0 1rem; }
+    .period-label { font-size:.82rem; color:var(--pmo-muted); }
+    .period-custom { display:flex; align-items:center; gap:.4rem; }
+    .period-sep { color:var(--pmo-muted); }
+    .period-active { font-size:.78rem; color:var(--pmo-muted);
+      background:rgba(255,255,255,.05); border:1px solid var(--pmo-border);
+      border-radius:1rem; padding:.2rem .7rem; white-space:nowrap; }
     .load-cell { min-width:220px; }
     .country-line { display:flex; align-items:center; gap:.35rem; margin-top:.2rem;
       font-size:.72rem; color:var(--pmo-muted); white-space:nowrap; }
@@ -238,7 +273,10 @@ const ISO2: Record<string, string> = {
   `],
 })
 export class TeamComponent implements OnInit {
-  private readonly service = inject(TeamService);
+  // Público (no private): el template lee/escribe directamente el rango de
+  // sprint en el servicio (service.periodStart/periodEnd/period) para que
+  // persista al navegar fuera de /team y volver — ver TeamService.
+  readonly service = inject(TeamService);
   private readonly employees = inject(EmployeeService);
   private readonly taskService = inject(TaskService);
   private readonly ticketService = inject(TicketService);
@@ -249,6 +287,17 @@ export class TeamComponent implements OnInit {
   readonly rows = signal<WorkloadRow[]>([]);
   readonly loading = signal(true);
   readonly expanded = signal<Record<string, boolean>>({});
+
+  readonly workdaySpan = computed(() => {
+    const p = this.service.period();
+    if (!p) return 0;
+    let count = 0;
+    for (let d = new Date(p.start); d <= p.end; d.setDate(d.getDate() + 1)) {
+      const wd = d.getDay();
+      if (wd !== 0 && wd !== 6) count++;
+    }
+    return count;
+  });
   readonly workByDev = signal<Record<string, {
     tasks: { id: string; name: string }[];
     tickets: { id: string; ticket_number: string; name: string }[];
@@ -285,11 +334,16 @@ export class TeamComponent implements OnInit {
       .map((t) => ({ ...t, name: wanted[t.code] }));
   });
 
-  ngOnInit() { this.reload(); }
+  ngOnInit() {
+    // Restores the sprint range saved server-side (survives a full page
+    // reload) before the first load, then reloads on every later mount too
+    // (loadPersistedPeriod is a no-op after the first call this session).
+    this.service.loadPersistedPeriod().subscribe(() => this.reload());
+  }
 
   reload() {
     this.loading.set(true);
-    this.service.workload().subscribe({
+    this.service.workload(this.service.period() ?? undefined).subscribe({
       next: (rows) => {
         rows.sort((a, b) => b.workload_pct - a.workload_pct);
         this.rows.set(rows);
@@ -298,6 +352,27 @@ export class TeamComponent implements OnInit {
       },
       error: () => this.loading.set(false),
     });
+  }
+
+  applyPreset(days: number) {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + days - 1);
+    this.service.setPeriod({ start, end });
+    this.reload();
+  }
+
+  applyCustomPeriod() {
+    const { periodStart, periodEnd } = this.service;
+    if (!periodStart || !periodEnd) return;
+    this.service.setPeriod({ start: periodStart, end: periodEnd });
+    this.reload();
+  }
+
+  clearPeriod() {
+    this.service.setPeriod(null);
+    this.reload();
   }
 
   availability(r: WorkloadRow) { return AVAILABILITY[r.alert]; }
