@@ -9,7 +9,6 @@ import { DatePickerModule } from 'primeng/datepicker';
 import { InputTextModule } from 'primeng/inputtext';
 
 import { Leave, LeaveCalendarDay, LeaveService } from './leave.service';
-import { Holiday, HolidayService } from './holiday.service';
 import { Employee, EmployeeService } from '../team/employee.service';
 import { CatalogsService } from '../../core/services/catalogs.service';
 import { NotificationService } from '../../core/services/notification.service';
@@ -34,10 +33,6 @@ function iso(d: Date): string {
     <div class="pmo-toolbar">
       <h2>Leaves</h2>
       <span class="spacer"></span>
-      @if (isManager()) {
-        <p-button label="Holidays" icon="pi pi-flag" severity="secondary" [outlined]="true"
-          (onClick)="holidaysOpen.set(true)" />
-      }
       @if (canWrite()) {
         <p-button label="New leave" icon="pi pi-calendar-plus" (onClick)="openCreate()" />
       }
@@ -212,43 +207,6 @@ function iso(d: Date): string {
           (onClick)="save()" />
       </ng-template>
     </p-dialog>
-
-    <p-dialog header="Public holidays" [visible]="holidaysOpen()"
-      (visibleChange)="holidaysOpen.set($event)" [modal]="true"
-      [style]="{width:'38rem'}" [draggable]="false">
-      <p class="dialog-hint">One entry per country and date: everyone based in that
-        country is off that day and leaves it out of the capacity math.</p>
-      <div class="holiday-form">
-        <p-datepicker [(ngModel)]="holDate" dateFormat="yy-mm-dd" [showIcon]="true"
-          placeholder="Date" appendTo="body" />
-        <p-select [options]="catalogs.get('locations')" optionLabel="name" optionValue="code"
-          [(ngModel)]="holLocation" placeholder="Country" [filter]="true" appendTo="body" />
-        <input pInputText [(ngModel)]="holName" placeholder="Holiday name"
-          (keyup.enter)="addHoliday()" />
-        <p-button label="Add" icon="pi pi-plus" [disabled]="!holValid() || holSaving()"
-          [loading]="holSaving()" (onClick)="addHoliday()" />
-      </div>
-      <h4 class="holiday-list-title">Holidays in {{ monthStart() | date:'MMMM y' }}</h4>
-      <p-table [value]="holidays()" dataKey="id">
-        <ng-template pTemplate="header">
-          <tr><th>Date</th><th>Name</th><th>Country</th><th style="width:3.5rem"></th></tr>
-        </ng-template>
-        <ng-template pTemplate="body" let-h>
-          <tr>
-            <td class="mono">{{ h.date | date:'EEE, MMM d' }}</td>
-            <td>{{ h.name }}</td>
-            <td>{{ h.location_name }}</td>
-            <td>
-              <button type="button" class="icon-btn icon-btn--danger" title="Delete"
-                (click)="removeHoliday(h)"><i class="pi pi-trash"></i></button>
-            </td>
-          </tr>
-        </ng-template>
-        <ng-template pTemplate="emptymessage">
-          <tr><td colspan="4">No holidays registered this month.</td></tr>
-        </ng-template>
-      </p-table>
-    </p-dialog>
   `,
   styles: [`
     .spacer { flex:1; }
@@ -332,21 +290,10 @@ function iso(d: Date): string {
     .conflict--warn { color:#e07a7a; font-weight:600; }
     .all-clear { display:flex; align-items:center; gap:.4rem; font-size:.82rem;
       color:#0ca30c; margin:0; }
-
-    .dialog-hint { color:var(--pmo-muted); font-size:.82rem; margin:.25rem 0 1rem; }
-    .holiday-form { display:grid;
-      grid-template-columns:minmax(8rem,9.5rem) minmax(8rem,10rem) minmax(0,1fr) auto;
-      gap:.6rem; align-items:center; margin-bottom:1.25rem; }
-    .holiday-form > * { min-width:0; }
-    .holiday-form input { width:100%; }
-    @media (max-width: 700px) { .holiday-form { grid-template-columns:1fr 1fr; } }
-    .holiday-list-title { margin:0 0 .5rem; font-size:.85rem; color:var(--pmo-muted);
-      font-weight:600; }
   `],
 })
 export class LeavesComponent implements OnInit {
   private readonly service = inject(LeaveService);
-  private readonly holidayService = inject(HolidayService);
   private readonly employeeService = inject(EmployeeService);
   private readonly notify = inject(NotificationService);
   private readonly auth = inject(AuthStore);
@@ -366,13 +313,6 @@ export class LeavesComponent implements OnInit {
   readonly myEmployeeId = computed(() => this.auth.user()?.employee ?? null);
   readonly canWrite = computed(() =>
     this.isManager() || (this.auth.hasAnyRole([ROLES.TEAM]) && !!this.myEmployeeId()));
-
-  readonly holidaysOpen = signal(false);
-  readonly holidays = signal<Holiday[]>([]);
-  readonly holSaving = signal(false);
-  holDate: Date | null = null;
-  holLocation: string | null = null;
-  holName = '';
 
   readonly dialogOpen = signal(false);
   readonly editingId = signal<string | null>(null);
@@ -410,7 +350,6 @@ export class LeavesComponent implements OnInit {
 
   ngOnInit() {
     this.loadCalendar();
-    this.loadHolidays();
     this.loadLeaves();
     if (this.isManager()) {
       this.employeeService.list({ page_size: 200, ordering: 'name' })
@@ -423,7 +362,6 @@ export class LeavesComponent implements OnInit {
     this.monthStart.set(new Date(m.getFullYear(), m.getMonth() + delta, 1));
     this.selectedDate.set(null);
     this.loadCalendar();
-    this.loadHolidays();
   }
 
   loadCalendar() {
@@ -436,46 +374,8 @@ export class LeavesComponent implements OnInit {
     });
   }
 
-  loadHolidays() {
-    const first = this.monthStart();
-    const last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
-    this.holidayService.list({
-      date_from: iso(first), date_to: iso(last), ordering: 'date', page_size: 100,
-    }).subscribe((page) => this.holidays.set(page.results));
-  }
-
   holidayTitle(day: LeaveCalendarDay): string {
     return day.holidays.map((h) => `${h.name} — ${h.location_name}`).join(', ');
-  }
-
-  holValid(): boolean {
-    return !!(this.holDate && this.holLocation && this.holName.trim());
-  }
-
-  addHoliday() {
-    if (!this.holValid() || this.holSaving()) return;
-    this.holSaving.set(true);
-    this.holidayService.create({
-      name: this.holName.trim(), location: this.holLocation!, date: iso(this.holDate!),
-    }).subscribe({
-      next: () => {
-        this.notify.success('Holiday registered');
-        this.holSaving.set(false);
-        this.holName = '';
-        this.loadHolidays();
-        this.loadCalendar();
-      },
-      error: () => this.holSaving.set(false),
-    });
-  }
-
-  removeHoliday(h: Holiday) {
-    if (!confirm(`Delete holiday "${h.name}" (${h.location_name}, ${h.date})?`)) return;
-    this.holidayService.remove(h.id).subscribe(() => {
-      this.notify.success('Holiday deleted');
-      this.loadHolidays();
-      this.loadCalendar();
-    });
   }
 
   loadLeaves() {

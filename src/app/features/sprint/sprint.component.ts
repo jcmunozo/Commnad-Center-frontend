@@ -1,9 +1,17 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
+import { DialogModule } from 'primeng/dialog';
+import { DatePickerModule } from 'primeng/datepicker';
+import { SelectModule } from 'primeng/select';
+import { InputTextModule } from 'primeng/inputtext';
+import { TableModule } from 'primeng/table';
 
 import { TeamService } from '../team/team.service';
 import { Holiday, HolidayService } from '../leaves/holiday.service';
+import { CatalogsService } from '../../core/services/catalogs.service';
+import { NotificationService } from '../../core/services/notification.service';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -12,32 +20,33 @@ function iso(d: Date): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-function parseIso(s: string): Date {
-  const [y, m, d] = s.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
-
 function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
 interface DayCell {
-  date: string; label: number; weekend: boolean;
-  inRange: boolean; pending: boolean; holidays: Holiday[];
+  date: string; label: number; weekend: boolean; inRange: boolean; holidays: Holiday[];
 }
 
 @Component({
   selector: 'app-sprint',
   standalone: true,
-  imports: [DatePipe, ButtonModule],
+  imports: [
+    DatePipe, FormsModule, ButtonModule, DialogModule, DatePickerModule, SelectModule,
+    InputTextModule, TableModule,
+  ],
   template: `
     <div class="pmo-toolbar">
       <h2>Sprint</h2>
       <span class="spacer"></span>
+      <p-button label="Holidays" icon="pi pi-flag" severity="secondary" [outlined]="true"
+        (onClick)="holidaysOpen.set(true)" />
       @if (service.period()) {
         <p-button label="Reset to current week" size="small" severity="secondary" [outlined]="true"
           icon="pi pi-times" (onClick)="clearPeriod()" />
       }
+      <p-button [label]="service.period() ? 'Change sprint' : 'Select sprint'"
+        icon="pi pi-calendar" (onClick)="openDialog()" />
     </div>
     <p class="intro">
       Set the period used to calculate team workload capacity. Task/leave/holiday
@@ -45,6 +54,19 @@ interface DayCell {
       this range. It applies to the <strong>Team</strong> load column and persists
       per user across sessions and devices.
     </p>
+
+    @if (service.period(); as p) {
+      <div class="sprint-tag">
+        <i class="pi pi-bolt"></i>
+        <span class="sprint-tag-range">{{ p.start | date:'MMM d, y' }} – {{ p.end | date:'MMM d, y' }}</span>
+        <span class="sprint-tag-sep">·</span>
+        <span>{{ workdaySpan() }} working days</span>
+      </div>
+    } @else {
+      <div class="sprint-tag sprint-tag--default">
+        <i class="pi pi-calendar"></i> No sprint set — using the current ISO week
+      </div>
+    }
 
     <div class="layout">
       <section class="calendar-card">
@@ -69,13 +91,11 @@ interface DayCell {
                 @for (w of weekdays; track w) { <div class="cal-dow">{{ w }}</div> }
                 @for (cell of cellsForMonth(m); track cell?.date ?? $index) {
                   @if (cell) {
-                    <button type="button" class="cal-day"
+                    <div class="cal-day"
                       [class.cal-day--today]="cell.date === todayIso"
                       [class.cal-day--weekend]="cell.weekend"
                       [class.cal-day--sprint]="cell.inRange"
-                      [class.cal-day--pending]="cell.pending"
-                      [title]="holidayTitle(cell.holidays)"
-                      (click)="onDayClick(cell.date)">
+                      [title]="holidayTitle(cell.holidays)">
                       <span class="cal-num">{{ cell.label }}</span>
                       @if (cell.holidays.length) {
                         <span class="cal-holiday">
@@ -85,7 +105,7 @@ interface DayCell {
                              : cell.holidays.length + ' countries' }}
                         </span>
                       }
-                    </button>
+                    </div>
                   } @else {
                     <div class="cal-blank"></div>
                   }
@@ -97,34 +117,87 @@ interface DayCell {
       </section>
 
       <aside class="day-card">
-        @if (pendingStart()) {
-          <p class="hint hint--active">
-            <i class="pi pi-info-circle"></i> Pick the end date for the sprint.
-          </p>
-          <p-button label="Cancel" size="small" severity="secondary" [outlined]="true"
-            (onClick)="pendingStart.set(null)" />
-        } @else if (service.period(); as p) {
-          <h3>Active sprint</h3>
-          <p class="period-range">{{ p.start | date:'MMM d, y' }} – {{ p.end | date:'MMM d, y' }}</p>
-          <p class="period-days">{{ workdaySpan() }} working days</p>
-          <p class="hint">Click a day on the calendar to start a new selection.</p>
-        } @else {
-          <h3>No sprint set</h3>
-          <p class="empty">Using the current ISO week as the default capacity period.</p>
-          <p class="hint">Click a start day, then an end day to define a sprint.</p>
-        }
+        <h3>Legend</h3>
         <p class="cal-legend">
           <span class="chip chip--sprint">Sprint period</span>
           <span class="chip chip--weekend">Weekend (not counted)</span>
           <span class="chip chip--holiday">Public holiday (CO / CL / PH)</span>
         </p>
+        <p class="hint">The calendar is read-only. Use
+          "{{ service.period() ? 'Change sprint' : 'Select sprint' }}" above to set the dates.</p>
       </aside>
     </div>
+
+    <p-dialog header="Select sprint" [visible]="dialogOpen()" (visibleChange)="dialogOpen.set($event)"
+      [modal]="true" [style]="{width:'26rem'}" [draggable]="false">
+      <div class="dialog-form">
+        <label>Start date *
+          <p-datepicker [(ngModel)]="formStart" dateFormat="yy-mm-dd" [showIcon]="true"
+            placeholder="Sprint start" appendTo="body" />
+        </label>
+        <label>End date *
+          <p-datepicker [(ngModel)]="formEnd" dateFormat="yy-mm-dd" [showIcon]="true"
+            [minDate]="formStart" placeholder="Sprint end" appendTo="body" />
+        </label>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button label="Cancel" severity="secondary" (onClick)="dialogOpen.set(false)" />
+        <p-button label="Save" [disabled]="!formStart || !formEnd || formStart > formEnd"
+          (onClick)="save()" />
+      </ng-template>
+    </p-dialog>
+
+    <p-dialog header="Public holidays" [visible]="holidaysOpen()"
+      (visibleChange)="holidaysOpen.set($event)" [modal]="true"
+      [style]="{width:'38rem'}" [draggable]="false">
+      <p class="dialog-hint">One entry per country and date: everyone based in that
+        country is off that day and leaves it out of the capacity math. Shown on both this
+        calendar and the Leaves calendar.</p>
+      <div class="holiday-form">
+        <p-datepicker [(ngModel)]="holDate" dateFormat="yy-mm-dd" [showIcon]="true"
+          placeholder="Date" appendTo="body" />
+        <p-select [options]="catalogs.get('locations')" optionLabel="name" optionValue="code"
+          [(ngModel)]="holLocation" placeholder="Country" [filter]="true" appendTo="body" />
+        <input pInputText [(ngModel)]="holName" placeholder="Holiday name"
+          (keyup.enter)="addHoliday()" />
+        <p-button label="Add" icon="pi pi-plus" [disabled]="!holValid() || holSaving()"
+          [loading]="holSaving()" (onClick)="addHoliday()" />
+      </div>
+      <h4 class="holiday-list-title">Holidays in {{ visibleMonths()[0] | date:'MMMM y' }}
+        @if (visibleMonths().length > 1) { – {{ visibleMonths()[1] | date:'MMMM y' }} }</h4>
+      <p-table [value]="holidayList()" dataKey="id">
+        <ng-template pTemplate="header">
+          <tr><th>Date</th><th>Name</th><th>Country</th><th style="width:3.5rem"></th></tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-h>
+          <tr>
+            <td class="mono">{{ h.date | date:'EEE, MMM d' }}</td>
+            <td>{{ h.name }}</td>
+            <td>{{ h.location_name }}</td>
+            <td>
+              <button type="button" class="icon-btn icon-btn--danger" title="Delete"
+                (click)="removeHoliday(h)"><i class="pi pi-trash"></i></button>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="4">No holidays registered in the visible months.</td></tr>
+        </ng-template>
+      </p-table>
+    </p-dialog>
   `,
   styles: [`
     .spacer { flex:1; }
     .intro { color:var(--pmo-muted); font-size:.9rem; max-width:46rem; line-height:1.5;
       margin:0 0 1.25rem; }
+
+    .sprint-tag { display:inline-flex; align-items:center; gap:.5rem; font-size:.85rem;
+      font-weight:600; color:#4ade80; background:rgba(34,197,94,.14);
+      border:1px solid rgba(34,197,94,.4); border-radius:1rem; padding:.4rem .9rem;
+      margin-bottom:1.25rem; }
+    .sprint-tag--default { color:var(--pmo-muted); background:rgba(255,255,255,.05);
+      border-color:var(--pmo-border); font-weight:500; }
+    .sprint-tag-sep { color:inherit; opacity:.6; }
 
     .layout { display:grid; grid-template-columns:minmax(0,1fr) 280px; gap:1rem;
       align-items:start; }
@@ -148,51 +221,72 @@ interface DayCell {
       padding-bottom:.35rem; text-transform:uppercase; letter-spacing:.05em; }
     .cal-blank { min-height:44px; }
     .cal-day { min-height:44px; border:1px solid var(--pmo-border); border-radius:6px;
-      background:rgba(255,255,255,.02); cursor:pointer; padding:.3rem .35rem;
+      background:rgba(255,255,255,.02); padding:.3rem .35rem;
       display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start;
-      gap:.15rem; font-family:inherit; color:var(--pmo-text); }
-    .cal-day:hover { border-color:var(--pmo-primary); }
+      gap:.15rem; color:var(--pmo-text); }
     .cal-day--today { border-color:rgba(134,239,172,.5);
       box-shadow:inset 0 0 0 1px rgba(134,239,172,.5); }
     .cal-day--today .cal-num { font-weight:700; }
     .cal-day--weekend { opacity:.55; }
     .cal-day--sprint { background:rgba(34,197,94,.18); border-color:rgba(34,197,94,.55); }
     .cal-day--sprint .cal-num { color:#4ade80; font-weight:700; }
-    .cal-day--pending { background:rgba(34,197,94,.32); border-color:#22c55e; }
     .cal-num { font-size:.8rem; font-variant-numeric:tabular-nums; }
     .cal-holiday { font-size:.6rem; color:#7db2ec; display:inline-flex; align-items:center;
       gap:.2rem; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .cal-holiday .pi { font-size:.55rem; }
 
-    .cal-legend { display:flex; flex-direction:column; gap:.5rem;
-      margin:1.25rem 0 0; padding-top:1rem; border-top:1px solid var(--pmo-border); }
+    .day-card h3 { margin:0 0 .75rem; font-size:.95rem; }
+    .cal-legend { display:flex; flex-direction:column; gap:.5rem; margin:0 0 1rem; }
     .chip { display:inline-flex; align-items:center; gap:.5rem; font-size:.78rem; font-weight:600; }
     .chip::before { content:''; width:7px; height:7px; border-radius:50%;
       background:currentColor; flex-shrink:0; }
     .chip--sprint { color:#4ade80; }
     .chip--weekend { color:var(--pmo-muted); }
     .chip--holiday { color:#7db2ec; }
+    .hint { color:var(--pmo-muted); font-size:.78rem; margin:0; padding-top:.85rem;
+      border-top:1px solid var(--pmo-border); }
 
-    .day-card h3 { margin:0 0 .6rem; font-size:.95rem; }
-    .period-range { font-size:.95rem; font-weight:600; margin:0 0 .3rem; }
-    .period-days { font-size:.82rem; color:var(--pmo-muted); margin:0 0 .85rem; }
-    .empty { color:var(--pmo-muted); font-size:.85rem; margin:0 0 .6rem; }
-    .hint { color:var(--pmo-muted); font-size:.78rem; margin:0; }
-    .hint--active { display:flex; align-items:center; gap:.4rem; color:#4ade80;
-      margin:0 0 .75rem; }
+    .dialog-form { display:flex; flex-direction:column; gap:1rem; padding-top:.25rem; }
+    .dialog-form label { display:flex; flex-direction:column; gap:.35rem; font-size:.85rem;
+      color:var(--pmo-muted); }
+
+    .dialog-hint { color:var(--pmo-muted); font-size:.82rem; margin:.25rem 0 1rem; }
+    .holiday-form { display:grid;
+      grid-template-columns:minmax(8rem,9.5rem) minmax(8rem,10rem) minmax(0,1fr) auto;
+      gap:.6rem; align-items:center; margin-bottom:1.25rem; }
+    .holiday-form > * { min-width:0; }
+    .holiday-form input { width:100%; }
+    @media (max-width: 700px) { .holiday-form { grid-template-columns:1fr 1fr; } }
+    .holiday-list-title { margin:0 0 .5rem; font-size:.85rem; color:var(--pmo-muted);
+      font-weight:600; }
+    .mono { font-variant-numeric:tabular-nums; }
+    .icon-btn { background:none; border:none; cursor:pointer; color:var(--pmo-muted);
+      padding:.35rem; font-size:.95rem; }
+    .icon-btn--danger:hover { color:var(--pmo-danger); }
   `],
 })
 export class SprintComponent implements OnInit {
   readonly service = inject(TeamService);
   private readonly holidayService = inject(HolidayService);
+  private readonly notify = inject(NotificationService);
+  readonly catalogs = inject(CatalogsService);
 
   readonly weekdays = WEEKDAYS;
   readonly todayIso = iso(new Date());
   readonly monthStart = signal(startOfMonth(new Date()));
   readonly holidays = signal<Record<string, Holiday[]>>({});
+  readonly holidayList = computed(() =>
+    Object.values(this.holidays()).flat().sort((a, b) => a.date.localeCompare(b.date)));
 
-  /** First day clicked while building a new selection; null once the range is committed. */
-  readonly pendingStart = signal<string | null>(null);
+  readonly dialogOpen = signal(false);
+  formStart: Date | null = null;
+  formEnd: Date | null = null;
+
+  readonly holidaysOpen = signal(false);
+  readonly holSaving = signal(false);
+  holDate: Date | null = null;
+  holLocation: string | null = null;
+  holName = '';
 
   /** Two calendars are shown when the committed sprint spans two different months. */
   readonly twoMonthMode = computed(() => {
@@ -229,29 +323,19 @@ export class SprintComponent implements OnInit {
     return count;
   });
 
-  private readonly activeRange = computed(() => {
-    const pending = this.pendingStart();
-    if (pending) return { start: pending, end: pending, pending: true };
-    const p = this.service.period();
-    if (!p) return null;
-    return { start: iso(p.start), end: iso(p.end), pending: false };
-  });
-
   cellsForMonth(first: Date): (DayCell | null)[] {
     const daysInMonth = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
     const lead = (first.getDay() + 6) % 7; // ISO: Monday first
-    const range = this.activeRange();
+    const p = this.service.period();
     const holidays = this.holidays();
     const cells: (DayCell | null)[] = Array.from({ length: lead }, () => null);
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(first.getFullYear(), first.getMonth(), d);
       const dateIso = iso(date);
       const weekend = date.getDay() === 0 || date.getDay() === 6;
-      const inRange = !!range && dateIso >= range.start && dateIso <= range.end;
+      const inRange = !!p && date >= p.start && date <= p.end;
       cells.push({
-        date: dateIso, label: d, weekend, inRange,
-        pending: !!range?.pending && inRange,
-        holidays: holidays[dateIso] ?? [],
+        date: dateIso, label: d, weekend, inRange, holidays: holidays[dateIso] ?? [],
       });
     }
     return cells;
@@ -281,22 +365,50 @@ export class SprintComponent implements OnInit {
     this.loadHolidays();
   }
 
-  onDayClick(dateIso: string) {
-    const start = this.pendingStart();
-    if (!start) {
-      this.pendingStart.set(dateIso);
-      return;
-    }
-    const [startIso, endIso] = start <= dateIso ? [start, dateIso] : [dateIso, start];
-    this.pendingStart.set(null);
-    const startDate = parseIso(startIso);
-    this.service.setPeriod({ start: startDate, end: parseIso(endIso) });
-    this.monthStart.set(startOfMonth(startDate));
+  holValid(): boolean {
+    return !!(this.holDate && this.holLocation && this.holName.trim());
+  }
+
+  addHoliday() {
+    if (!this.holValid() || this.holSaving()) return;
+    this.holSaving.set(true);
+    this.holidayService.create({
+      name: this.holName.trim(), location: this.holLocation!, date: iso(this.holDate!),
+    }).subscribe({
+      next: () => {
+        this.notify.success('Holiday registered');
+        this.holSaving.set(false);
+        this.holName = '';
+        this.loadHolidays();
+      },
+      error: () => this.holSaving.set(false),
+    });
+  }
+
+  removeHoliday(h: Holiday) {
+    if (!confirm(`Delete holiday "${h.name}" (${h.location_name}, ${h.date})?`)) return;
+    this.holidayService.remove(h.id).subscribe(() => {
+      this.notify.success('Holiday deleted');
+      this.loadHolidays();
+    });
+  }
+
+  openDialog() {
+    const p = this.service.period();
+    this.formStart = p?.start ?? null;
+    this.formEnd = p?.end ?? null;
+    this.dialogOpen.set(true);
+  }
+
+  save() {
+    if (!this.formStart || !this.formEnd || this.formStart > this.formEnd) return;
+    this.service.setPeriod({ start: this.formStart, end: this.formEnd });
+    this.monthStart.set(startOfMonth(this.formStart));
     this.loadHolidays();
+    this.dialogOpen.set(false);
   }
 
   clearPeriod() {
-    this.pendingStart.set(null);
     this.service.setPeriod(null);
   }
 }
