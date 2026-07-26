@@ -51,6 +51,12 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/team/team.component').then((m) => m.TeamComponent),
       },
+      {
+        path: 'sprint',
+        canActivate: [roleGuard([ROLES.ADMIN, ROLES.PM])],
+        loadComponent: () =>
+          import('./features/sprint/sprint.component').then((m) => m.SprintComponent),
+      },
     ],
   },
   { path: 'forbidden', loadComponent: () => import('./shared/components/forbidden.component').then((m) => m.ForbiddenComponent) },

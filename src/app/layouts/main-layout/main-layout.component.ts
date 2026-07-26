@@ -122,6 +122,7 @@ export class MainLayoutComponent {
     { label: 'Leaves', icon: 'pi-calendar-minus', route: '/leaves' },
     { label: 'Notes', icon: 'pi-book', route: '/notes' },
     { label: 'Team', icon: 'pi-users', route: '/team', roles: ['PMO Admin', 'Project Manager'] },
+    { label: 'Sprint', icon: 'pi-bolt', route: '/sprint', roles: ['PMO Admin', 'Project Manager'] },
   ];
 
   readonly visibleNav = computed(() =>

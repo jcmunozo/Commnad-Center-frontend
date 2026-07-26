@@ -40,14 +40,12 @@ export class TeamService {
   private readonly http = inject(HttpClient);
 
   /**
-   * Rango de sprint seleccionado en /team. Vive aquí (no en el componente)
+   * Rango de sprint seleccionado en /sprint. Vive aquí (no en el componente)
    * porque este servicio es un singleton `providedIn: 'root'`: al navegar a
-   * otra vista Angular destruye TeamComponent, pero el servicio sigue vivo,
+   * otra vista Angular destruye el componente, pero el servicio sigue vivo,
    * así que la selección persiste hasta que el usuario la cambie a mano.
    */
   readonly period = signal<WorkloadPeriod | null>(null);
-  periodStart: Date | null = null;
-  periodEnd: Date | null = null;
   private hydratedFromServer = false;
 
   /**
@@ -61,11 +59,10 @@ export class TeamService {
     return this.http.get<WorkloadPeriodDto>(`${environment.apiUrl}/resources/workload-period/`).pipe(
       tap((dto) => {
         if (dto.start_date && dto.end_date) {
-          const start = this.parseDate(dto.start_date);
-          const end = this.parseDate(dto.end_date);
-          this.periodStart = start;
-          this.periodEnd = end;
-          this.period.set({ start, end });
+          this.period.set({
+            start: this.parseDate(dto.start_date),
+            end: this.parseDate(dto.end_date),
+          });
         }
       }),
       map(() => undefined),
@@ -75,8 +72,6 @@ export class TeamService {
 
   /** Sets the sprint range (or clears it with `null`) and persists it server-side. */
   setPeriod(period: WorkloadPeriod | null) {
-    this.periodStart = period?.start ?? null;
-    this.periodEnd = period?.end ?? null;
     this.period.set(period);
     this.http.put<WorkloadPeriodDto>(`${environment.apiUrl}/resources/workload-period/`, {
       start_date: period ? this.toDateStr(period.start) : null,
