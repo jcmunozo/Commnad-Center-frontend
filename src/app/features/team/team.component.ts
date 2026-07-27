@@ -16,6 +16,7 @@ import { TaskService } from '../projects/project-related.services';
 import { TicketService } from '../tickets/ticket.service';
 import { CatalogsService } from '../../core/services/catalogs.service';
 import { NotificationService } from '../../core/services/notification.service';
+import { ConfirmService } from '../../core/services/confirm.service';
 import { AuthStore } from '../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../shared/components/status-badge/status-badge.component';
 
@@ -245,6 +246,7 @@ export class TeamComponent implements OnInit {
   private readonly taskService = inject(TaskService);
   private readonly ticketService = inject(TicketService);
   private readonly notify = inject(NotificationService);
+  private readonly confirm = inject(ConfirmService);
   private readonly auth = inject(AuthStore);
   readonly catalogs = inject(CatalogsService);
 
@@ -402,11 +404,14 @@ export class TeamComponent implements OnInit {
   }
 
   deactivate(row: WorkloadRow) {
-    if (!confirm(`Deactivate ${row.name}? Their tasks will show as unassigned in Team.`)) return;
-    this.employees.remove(row.employee_id).subscribe(() => {
-      this.notify.success('Developer deactivated');
-      this.reload();
-    });
+    this.confirm.danger(
+      `Deactivate ${row.name}? Their tasks will show as unassigned in Team.`,
+      () => this.employees.remove(row.employee_id).subscribe(() => {
+        this.notify.success('Developer deactivated');
+        this.reload();
+      }),
+      { header: 'Deactivate developer', acceptLabel: 'Deactivate' },
+    );
   }
 
 }

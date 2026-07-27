@@ -4,6 +4,7 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideTransloco } from '@jsverse/transloco';
 import { providePrimeNG } from 'primeng/config';
+import { ConfirmationService } from 'primeng/api';
 import Aura from '@primeng/themes/aura';
 
 import { routes } from '../../app.routes';
@@ -19,6 +20,7 @@ export const appConfig: ApplicationConfig = {
       withInterceptors([authInterceptor, errorInterceptor, loadingInterceptor]),
     ),
     provideAnimationsAsync(),
+    ConfirmationService,
     providePrimeNG({
       theme: {
         preset: Aura,

@@ -13,6 +13,7 @@ import { SubTask, Task } from '../project-related.models';
 import { Employee, EmployeeService } from '../../team/employee.service';
 import { CatalogsService } from '../../../core/services/catalogs.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { ConfirmService } from '../../../core/services/confirm.service';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 
@@ -146,6 +147,7 @@ export class ProjectSubtasksTabComponent implements OnInit {
   private readonly taskService = inject(TaskService);
   private readonly employees = inject(EmployeeService);
   private readonly notify = inject(NotificationService);
+  private readonly confirm = inject(ConfirmService);
   private readonly auth = inject(AuthStore);
   readonly catalogs = inject(CatalogsService);
 
@@ -233,9 +235,12 @@ export class ProjectSubtasksTabComponent implements OnInit {
   }
 
   remove(s: SubTask) {
-    if (!confirm(`Delete subtask ${s.legacy_code ?? ''}?`)) return;
-    this.service.remove(s.id).subscribe(() => {
-      this.notify.success('Subtask deleted'); this.load();
-    });
+    this.confirm.danger(
+      `Delete subtask ${s.legacy_code ?? ''}?`,
+      () => this.service.remove(s.id).subscribe(() => {
+        this.notify.success('Subtask deleted'); this.load();
+      }),
+      { header: 'Delete subtask' },
+    );
   }
 }

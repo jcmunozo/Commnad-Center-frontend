@@ -45,6 +45,17 @@ a { color: var(--pmo-primary); text-decoration: none; }
 
 /* ---- Diálogos de formulario (global): controles fluidos, sin scroll horizontal ---- */
 .p-dialog .p-dialog-content { overflow-x: hidden; }
+
+/* ---- Ícono del diálogo de confirmación: badge circular con el color de la acción ---- */
+.p-confirmdialog .p-confirmdialog-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 2.75rem; height: 2.75rem; min-width: 2.75rem;
+  border-radius: 50%;
+  background: rgba(220, 38, 38, .12);
+  color: var(--pmo-danger);
+  font-size: 1.25rem;
+}
+.app-dark .p-confirmdialog .p-confirmdialog-icon { background: rgba(248, 113, 113, .16); }
 .form-grid input, .form-grid textarea,
 .dialog-form input, .dialog-form textarea,
 .field input, .field textarea { width: 100%; }

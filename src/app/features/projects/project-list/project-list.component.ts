@@ -11,6 +11,7 @@ import { ProjectsStore } from '../projects.store';
 import { ProjectService } from '../project.service';
 import { CatalogsService } from '../../../core/services/catalogs.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { ConfirmService } from '../../../core/services/confirm.service';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 
@@ -113,16 +114,20 @@ export class ProjectListComponent implements OnInit {
   readonly catalogs = inject(CatalogsService);
   private readonly service = inject(ProjectService);
   private readonly notify = inject(NotificationService);
+  private readonly confirm = inject(ConfirmService);
   private readonly auth = inject(AuthStore);
 
   readonly canArchive = computed(() => this.auth.hasAnyRole(['PMO Admin', 'Project Manager']));
 
   archive(p: { id: string; legacy_code: string | null; name: string }) {
-    if (!confirm(`Archive project ${p.legacy_code ?? ''} "${p.name}"? It will no longer appear in the app.`)) return;
-    this.service.remove(p.id).subscribe(() => {
-      this.notify.success('Project archived');
-      this.store.load();
-    });
+    this.confirm.danger(
+      `Archive project ${p.legacy_code ?? ''} "${p.name}"? It will no longer appear in the app.`,
+      () => this.service.remove(p.id).subscribe(() => {
+        this.notify.success('Project archived');
+        this.store.load();
+      }),
+      { header: 'Archive project', acceptLabel: 'Archive' },
+    );
   }
 
   searchTerm = '';

@@ -12,6 +12,7 @@ import { Ticket, TicketWrite } from '../ticket.models';
 import { EmployeeService, Employee } from '../../team/employee.service';
 import { CatalogsService } from '../../../core/services/catalogs.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { ConfirmService } from '../../../core/services/confirm.service';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 
@@ -129,6 +130,7 @@ export class TicketListComponent implements OnInit {
   private readonly service = inject(TicketService);
   private readonly employees = inject(EmployeeService);
   private readonly notify = inject(NotificationService);
+  private readonly confirm = inject(ConfirmService);
   private readonly auth = inject(AuthStore);
   readonly catalogs = inject(CatalogsService);
 
@@ -254,10 +256,13 @@ export class TicketListComponent implements OnInit {
   }
 
   archive(t: Ticket) {
-    if (!confirm(`Archive ticket ${t.ticket_number} "${t.name}"?`)) return;
-    this.service.remove(t.id).subscribe(() => {
-      this.notify.success('Ticket archived');
-      this.reload();
-    });
+    this.confirm.danger(
+      `Archive ticket ${t.ticket_number} "${t.name}"?`,
+      () => this.service.remove(t.id).subscribe(() => {
+        this.notify.success('Ticket archived');
+        this.reload();
+      }),
+      { header: 'Archive ticket', acceptLabel: 'Archive' },
+    );
   }
 }

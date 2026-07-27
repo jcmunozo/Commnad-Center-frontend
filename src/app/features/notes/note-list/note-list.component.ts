@@ -17,6 +17,7 @@ import {
 import { ProjectService } from '../../projects/project.service';
 import { Project } from '../../projects/project.models';
 import { NotificationService } from '../../../core/services/notification.service';
+import { ConfirmService } from '../../../core/services/confirm.service';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 
 function iso(d: Date): string {
@@ -183,6 +184,7 @@ export class NoteListComponent implements OnInit {
   private readonly service = inject(NoteService);
   private readonly projectsSvc = inject(ProjectService);
   private readonly notify = inject(NotificationService);
+  private readonly confirm = inject(ConfirmService);
 
   readonly rows = signal<Note[]>([]);
   readonly total = signal(0);
@@ -323,10 +325,13 @@ export class NoteListComponent implements OnInit {
   }
 
   archive(n: Note) {
-    if (!confirm(`Archive note "${n.title}"?`)) return;
-    this.service.remove(n.id).subscribe(() => {
-      this.notify.success('Note archived');
-      this.reload();
-    });
+    this.confirm.danger(
+      `Archive note "${n.title}"?`,
+      () => this.service.remove(n.id).subscribe(() => {
+        this.notify.success('Note archived');
+        this.reload();
+      }),
+      { header: 'Archive note', acceptLabel: 'Archive' },
+    );
   }
 }

@@ -16,6 +16,7 @@ import { SubTask, Task } from '../project-related.models';
 import { Employee, EmployeeService } from '../../team/employee.service';
 import { CatalogsService } from '../../../core/services/catalogs.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { ConfirmService } from '../../../core/services/confirm.service';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 
@@ -242,6 +243,7 @@ export class ProjectTasksTabComponent implements OnInit {
   private readonly subtaskService = inject(SubTaskService);
   private readonly employees = inject(EmployeeService);
   private readonly notify = inject(NotificationService);
+  private readonly confirm = inject(ConfirmService);
   private readonly auth = inject(AuthStore);
   readonly catalogs = inject(CatalogsService);
 
@@ -370,12 +372,15 @@ export class ProjectTasksTabComponent implements OnInit {
   }
 
   remove(t: Task) {
-    if (!confirm(`Delete task ${t.legacy_code ?? ''} "${t.name}"?`)) return;
-    this.service.remove(t.id).subscribe(() => {
-      this.notify.success('Tarea eliminada');
-      this.load();
-      this.changed.emit();
-    });
+    this.confirm.danger(
+      `Delete task ${t.legacy_code ?? ''} "${t.name}"?`,
+      () => this.service.remove(t.id).subscribe(() => {
+        this.notify.success('Tarea eliminada');
+        this.load();
+        this.changed.emit();
+      }),
+      { header: 'Delete task' },
+    );
   }
 
   openReassign(t: Task) {

@@ -12,6 +12,7 @@ import { Leave, LeaveCalendarDay, LeaveService } from './leave.service';
 import { Employee, EmployeeService } from '../team/employee.service';
 import { CatalogsService } from '../../core/services/catalogs.service';
 import { NotificationService } from '../../core/services/notification.service';
+import { ConfirmService } from '../../core/services/confirm.service';
 import { AuthStore } from '../../core/auth/auth.store';
 import { ROLES } from '../../core/auth/auth.models';
 
@@ -296,6 +297,7 @@ export class LeavesComponent implements OnInit {
   private readonly service = inject(LeaveService);
   private readonly employeeService = inject(EmployeeService);
   private readonly notify = inject(NotificationService);
+  private readonly confirm = inject(ConfirmService);
   private readonly auth = inject(AuthStore);
   readonly catalogs = inject(CatalogsService);
 
@@ -478,11 +480,14 @@ export class LeavesComponent implements OnInit {
   }
 
   remove(l: Leave) {
-    if (!confirm(`Delete ${l.employee_name}'s leave (${l.start_date} → ${l.end_date})?`)) return;
-    this.service.remove(l.id).subscribe(() => {
-      this.notify.success('Leave deleted');
-      this.loadLeaves();
-      this.loadCalendar();
-    });
+    this.confirm.danger(
+      `Delete ${l.employee_name}'s leave (${l.start_date} → ${l.end_date})?`,
+      () => this.service.remove(l.id).subscribe(() => {
+        this.notify.success('Leave deleted');
+        this.loadLeaves();
+        this.loadCalendar();
+      }),
+      { header: 'Delete leave' },
+    );
   }
 }

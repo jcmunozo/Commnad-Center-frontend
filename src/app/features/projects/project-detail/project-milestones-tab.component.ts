@@ -15,6 +15,7 @@ import { Milestone, Task } from '../project-related.models';
 import { Employee, EmployeeService } from '../../team/employee.service';
 import { CatalogsService } from '../../../core/services/catalogs.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { ConfirmService } from '../../../core/services/confirm.service';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 
@@ -131,6 +132,7 @@ export class ProjectMilestonesTabComponent implements OnInit {
   private readonly taskService = inject(TaskService);
   private readonly employees = inject(EmployeeService);
   private readonly notify = inject(NotificationService);
+  private readonly confirm = inject(ConfirmService);
   private readonly auth = inject(AuthStore);
   readonly catalogs = inject(CatalogsService);
 
@@ -216,9 +218,12 @@ export class ProjectMilestonesTabComponent implements OnInit {
   }
 
   remove(m: Milestone) {
-    if (!confirm(`Delete milestone ${m.legacy_code ?? ''} "${m.name}"?`)) return;
-    this.service.remove(m.id).subscribe(() => {
-      this.notify.success('Milestone deleted'); this.load();
-    });
+    this.confirm.danger(
+      `Delete milestone ${m.legacy_code ?? ''} "${m.name}"?`,
+      () => this.service.remove(m.id).subscribe(() => {
+        this.notify.success('Milestone deleted'); this.load();
+      }),
+      { header: 'Delete milestone' },
+    );
   }
 }
