@@ -18,7 +18,10 @@ const ROLE_ORDER = ['PMO Admin', 'Project Manager', 'Team Member', 'Viewer'];
   template: `
     <div class="layout">
       <aside class="sidenav">
-        <div class="brand">PMO Command Center</div>
+        <div class="brand">
+          <img src="assets/logo.png" alt="" class="brand-logo" />
+          <span>PMO Command Center</span>
+        </div>
         <nav>
           @for (item of visibleNav(); track item.route) {
             <a [routerLink]="item.route" routerLinkActive="active">
@@ -76,7 +79,9 @@ const ROLE_ORDER = ['PMO Admin', 'Project Manager', 'Team Member', 'Viewer'];
   styles: [`
     .layout { display:grid; grid-template-columns:220px 1fr; min-height:100vh; }
     .sidenav { background:#0f172a; color:#cbd5e1; padding:1rem .5rem; }
-    .brand { font-weight:700; color:#fff; padding:.5rem 1rem 1.5rem; font-size:.95rem; }
+    .brand { display:flex; align-items:center; gap:.6rem; font-weight:700; color:#fff;
+      padding:.5rem 1rem 1.5rem; font-size:.95rem; }
+    .brand-logo { width:40px; height:40px; object-fit:contain; flex-shrink:0; }
     .sidenav nav a { display:flex; gap:.75rem; align-items:center; padding:.6rem 1rem; border-radius:var(--radius); color:#cbd5e1; }
     .sidenav nav a.active, .sidenav nav a:hover { background:#1e293b; color:#fff; }
     .topbar { display:flex; align-items:center; gap:.75rem; padding:.4rem 1rem; background:var(--pmo-surface); border-bottom:1px solid var(--pmo-border); }

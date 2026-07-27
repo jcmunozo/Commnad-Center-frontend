@@ -8,6 +8,7 @@ import { RouterOutlet } from '@angular/router';
   template: `
     <div class="auth-shell">
       <div class="auth-card">
+        <img src="assets/logo.png" alt="" class="auth-logo" />
         <h1 class="auth-brand">PMO Command Center</h1>
         <router-outlet />
       </div>
@@ -16,6 +17,7 @@ import { RouterOutlet } from '@angular/router';
   styles: [`
     .auth-shell { min-height:100vh; display:grid; place-items:center; background:var(--surface-bg); }
     .auth-card { width:360px; background:var(--pmo-surface); padding:2rem; border-radius:var(--radius); box-shadow:0 10px 30px rgba(0,0,0,.08); }
+    .auth-logo { display:block; width:64px; height:64px; object-fit:contain; margin:0 auto 1rem; }
     .auth-brand { font-size:1.25rem; margin:0 0 1.5rem; color:var(--pmo-primary); text-align:center; }
   `],
 })
