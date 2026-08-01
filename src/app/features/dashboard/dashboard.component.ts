@@ -14,6 +14,7 @@ import { KpiCardComponent } from '../../shared/components/kpi-card/kpi-card.comp
 // Paleta validada (dataviz) sobre la superficie oscura #18181b:
 // azul de serie 3:1+, estados con etiqueta de texto siempre presente.
 const BLUE = '#3987e5';
+const ORANGE = '#d95926';
 const GOOD = '#0ca30c';
 const WARNING = '#fab219';
 const CRITICAL = '#d03b3b';
@@ -108,6 +109,25 @@ const AXIS_LABELS = { style: { colors: '#a1a1aa' } };
             </div>
           </div>
         }
+
+        @if (effort().labels.length) {
+          <div class="chart-card chart-card--wide">
+            <h3>Estimated vs actual hours <span class="chart-sub">per task</span></h3>
+            <apx-chart [series]="[
+                { name: 'Estimated', data: effort().estimated },
+                { name: 'Actual', data: effort().actual }
+              ]"
+              [chart]="effortChartCfg(effort().labels.length)"
+              [plotOptions]="barOpts" [colors]="['${BLUE}', '${ORANGE}']"
+              [dataLabels]="hoursLabels" [xaxis]="{ categories: effort().labels, labels: axisLabels }"
+              [yaxis]="{ labels: axisLabels }" [grid]="grid"
+              [legend]="{ show: true, position: 'top', labels: { colors: '#a1a1aa' } }"
+              [tooltip]="{ theme: 'dark', y: { formatter: hoursFormatter } }" />
+            <div class="viz-legend">
+              <span>Tasks without a recorded estimate are excluded. Actual = 0h means the task has not logged hours yet.</span>
+            </div>
+          </div>
+        }
       </div>
     }
 
@@ -166,6 +186,7 @@ const AXIS_LABELS = { style: { colors: '#a1a1aa' } };
     .charts { margin-top:1.5rem; display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); gap:1.25rem; }
     .chart-card { background:var(--pmo-surface); padding:1rem 1.25rem; border-radius:var(--radius);
       border:1px solid var(--pmo-border); }
+    .chart-card--wide { grid-column: 1 / -1; }
     .chart-card h3 { margin:0 0 .25rem; font-size:.95rem; }
     .chart-sub { font-weight:400; font-size:.75rem; color:var(--pmo-muted); margin-left:.5rem; }
     .viz-legend { display:flex; gap:1rem; flex-wrap:wrap; font-size:.75rem; color:var(--pmo-muted);
@@ -224,6 +245,11 @@ export class DashboardComponent implements OnInit {
     enabled: true, style: { colors: ['#e4e4e7'], fontWeight: 600 },
     formatter: (v: number) => `${Math.round(v)}%`,
   };
+  readonly hoursLabels = {
+    enabled: true, style: { colors: ['#e4e4e7'], fontWeight: 600 },
+    formatter: (v: number) => `${v}h`,
+  };
+  readonly hoursFormatter = (v: number) => `${v} h`;
 
   /** Ordena un conteo {code: n} según el orden del catálogo y lo etiqueta. */
   private ordered(counts: Record<string, number>, slug: 'project-statuses' | 'task-statuses') {
@@ -257,8 +283,23 @@ export class DashboardComponent implements OnInit {
     };
   });
 
+  readonly effort = computed(() => {
+    const rows = this.kpis()?.tasks_effort ?? [];
+    return {
+      labels: rows.map((t) => {
+        const label = `${t.legacy_code ?? ''} — ${t.name}`;
+        return label.length > 42 ? `${label.slice(0, 41)}…` : label;
+      }),
+      estimated: rows.map((t) => t.estimated_hours),
+      actual: rows.map((t) => t.actual_hours),
+    };
+  });
+
   chartCfg(rows: number) {
     return { type: 'bar' as const, height: Math.max(160, rows * 44 + 60), ...BASE_CHART };
+  }
+  effortChartCfg(rows: number) {
+    return { type: 'bar' as const, height: Math.max(200, rows * 50 + 80), ...BASE_CHART };
   }
 
   ngOnInit() {

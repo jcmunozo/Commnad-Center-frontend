@@ -14,6 +14,17 @@ export interface PortfolioKpis {
     progress_pct: number;
     health: string | null;
   }[];
+  tasks_effort: TaskEffort[];
+}
+
+export interface TaskEffort {
+  id: string;
+  legacy_code: string | null;
+  name: string;
+  project_name: string;
+  status: string;
+  estimated_hours: number;
+  actual_hours: number;
 }
 
 export interface PortfolioAlerts {
