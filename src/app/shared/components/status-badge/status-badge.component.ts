@@ -2,7 +2,7 @@ import { Component, Input } from '@angular/core';
 import { TagModule } from 'primeng/tag';
 
 const SEVERITY_MAP: Record<string, 'success' | 'info' | 'warn' | 'danger'> = {
-  LOW: 'info', MEDIUM: 'warn', HIGH: 'warn', CRITICAL: 'danger',
+  LOW: 'info', MEDIUM: 'warn', HIGH: 'danger', CRITICAL: 'danger',
   GREEN: 'success', YELLOW: 'warn', RED: 'danger',
   DONE: 'success', COMPLETED: 'success', BLOCKED: 'danger', CANCELLED: 'danger',
   IN_PROGRESS: 'info',
