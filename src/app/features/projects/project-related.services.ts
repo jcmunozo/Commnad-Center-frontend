@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { HttpParams } from '@angular/common/http';
 
 import { ApiBaseService } from '../../core/services/api-base.service';
 import { Milestone, SubTask, Task, TaskAssignee } from './project-related.models';
@@ -15,6 +16,13 @@ export class TaskService extends ApiBaseService<Task> {
     return this.http.put<TaskAssignee[]>(`${this.url}/${taskId}/assignees/`, {
       employees: employeeIds,
     });
+  }
+
+  /** Downloads the filtered task list as an .xlsx file (same filters as `list`). */
+  exportXlsx(params: Record<string, string> = {}) {
+    let httpParams = new HttpParams();
+    Object.entries(params).forEach(([k, v]) => { if (v) httpParams = httpParams.set(k, v); });
+    return this.http.get(`${this.url}/export/`, { params: httpParams, responseType: 'blob' });
   }
 }
 

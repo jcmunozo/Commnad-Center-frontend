@@ -46,6 +46,8 @@ const ISO2: Record<string, string> = {
     <div class="pmo-toolbar">
       <h2>Team</h2>
       <span class="spacer"></span>
+      <p-button label="Export tasks (.xlsx)" icon="pi pi-file-excel" severity="secondary"
+        (onClick)="exportAllTasks()" />
       @if (canManage()) {
         <p-button label="New developer" icon="pi pi-user-plus" (onClick)="openCreate()" />
       }
@@ -330,6 +332,21 @@ export class TeamComponent implements OnInit {
       this.workByDev.update((m) => ({
         ...m, [row.employee_id]: { tasks: openTasks, tickets: openTickets },
       }));
+    });
+  }
+
+  /** Downloads every active task, across all devs, as .xlsx (task, dev, estimated hours). */
+  exportAllTasks() {
+    this.taskService.exportXlsx().subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'tasks_export.xlsx';
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => this.notify.error('Could not export tasks'),
     });
   }
 
