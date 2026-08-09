@@ -35,6 +35,13 @@ export class MilestoneService extends ApiBaseService<Milestone> {
       task: taskId,
     });
   }
+
+  /** Downloads the filtered milestone list as an .xlsx file (same filters as `list`). */
+  exportXlsx(params: Record<string, string> = {}) {
+    let httpParams = new HttpParams();
+    Object.entries(params).forEach(([k, v]) => { if (v) httpParams = httpParams.set(k, v); });
+    return this.http.get(`${this.url}/export/`, { params: httpParams, responseType: 'blob' });
+  }
 }
 
 @Injectable({ providedIn: 'root' })

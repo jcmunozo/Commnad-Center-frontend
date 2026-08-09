@@ -10,6 +10,7 @@ import { TableModule } from 'primeng/table';
 
 import { TeamService } from '../team/team.service';
 import { Holiday, HolidayService } from '../leaves/holiday.service';
+import { MilestoneService, TaskService } from '../projects/project-related.services';
 import { CatalogsService } from '../../core/services/catalogs.service';
 import { NotificationService } from '../../core/services/notification.service';
 import { ConfirmService } from '../../core/services/confirm.service';
@@ -59,6 +60,10 @@ interface DayCell {
       <span class="spacer"></span>
       <p-button label="Holidays" icon="pi pi-flag" severity="secondary" [outlined]="true"
         (onClick)="holidaysOpen.set(true)" />
+      <p-button label="Export tasks (.xlsx)" icon="pi pi-file-excel" severity="secondary"
+        [outlined]="true" (onClick)="exportTasks()" />
+      <p-button label="Export milestones (.xlsx)" icon="pi pi-file-excel" severity="secondary"
+        [outlined]="true" (onClick)="exportMilestones()" />
       @if (service.period()) {
         <p-button label="Reset to current week" severity="secondary" [outlined]="true"
           icon="pi pi-times" (onClick)="clearPeriod()" />
@@ -301,6 +306,8 @@ interface DayCell {
 export class SprintComponent implements OnInit {
   readonly service = inject(TeamService);
   private readonly holidayService = inject(HolidayService);
+  private readonly taskService = inject(TaskService);
+  private readonly milestoneService = inject(MilestoneService);
   private readonly notify = inject(NotificationService);
   private readonly confirm = inject(ConfirmService);
   readonly catalogs = inject(CatalogsService);
@@ -500,5 +507,32 @@ export class SprintComponent implements OnInit {
   clearPeriod() {
     this.service.setPeriod(null);
     this.loadPeriodHolidays();
+  }
+
+  /** Downloads every active task as an .xlsx file — no sprint-range filter, since
+   *  tasks are exported as soon as they're ready regardless of when they're due. */
+  exportTasks() {
+    this.taskService.exportXlsx().subscribe({
+      next: (blob) => this.downloadBlob(blob, 'tasks_export.xlsx'),
+      error: () => this.notify.error('Could not export tasks'),
+    });
+  }
+
+  /** Downloads every active milestone (all projects) as an .xlsx file — no
+   *  sprint-range filter, same reasoning as `exportTasks`. */
+  exportMilestones() {
+    this.milestoneService.exportXlsx().subscribe({
+      next: (blob) => this.downloadBlob(blob, 'milestones_export.xlsx'),
+      error: () => this.notify.error('Could not export milestones'),
+    });
+  }
+
+  private downloadBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 }
