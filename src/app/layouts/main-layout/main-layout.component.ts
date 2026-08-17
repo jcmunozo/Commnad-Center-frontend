@@ -120,15 +120,16 @@ export class MainLayoutComponent {
   readonly loading = inject(LoadingService);
   private readonly catalogs = inject(CatalogsService);
 
+  // Orden por longitud de label (ascendente): Team, Notes, Sprint, Leaves, Tickets, Projects, Dashboard, Continuous Improvement.
   private readonly nav: NavItem[] = [
     { label: 'Dashboard', icon: 'pi-chart-bar', route: '/dashboard' },
-    { label: 'Projects', icon: 'pi-folder', route: '/projects' },
-    { label: 'Tickets', icon: 'pi-ticket', route: '/tickets' },
-    { label: 'Leaves', icon: 'pi-calendar-minus', route: '/leaves' },
-    { label: 'Notes', icon: 'pi-book', route: '/notes' },
-    { label: 'Continuous Improvement', icon: 'pi-sparkles', route: '/continuous-improvement' },
     { label: 'Team', icon: 'pi-users', route: '/team', roles: ['PMO Admin', 'Project Manager'] },
+    { label: 'Notes', icon: 'pi-book', route: '/notes' },
     { label: 'Sprint', icon: 'pi-bolt', route: '/sprint', roles: ['PMO Admin', 'Project Manager'] },
+    { label: 'Leaves', icon: 'pi-calendar-minus', route: '/leaves' },
+    { label: 'Tickets', icon: 'pi-ticket', route: '/tickets' },
+    { label: 'Projects', icon: 'pi-folder', route: '/projects' },
+    { label: 'Continuous Improvement', icon: 'pi-sparkles', route: '/continuous-improvement' },
   ];
 
   readonly visibleNav = computed(() =>
