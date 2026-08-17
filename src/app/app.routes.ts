@@ -47,9 +47,9 @@ export const routes: Routes = [
       },
       {
         path: 'continuous-improvement',
-        loadComponent: () =>
-          import('./features/continuous-improvement/work-item-list/work-item-list.component').then(
-            (m) => m.WorkItemListComponent),
+        loadChildren: () =>
+          import('./features/continuous-improvement/continuous-improvement.routes').then(
+            (m) => m.CONTINUOUS_IMPROVEMENT_ROUTES),
       },
       {
         path: 'team',
