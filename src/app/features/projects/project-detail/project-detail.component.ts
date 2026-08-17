@@ -12,6 +12,7 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
 import { ProjectTasksTabComponent } from './project-tasks-tab.component';
 import { ProjectMilestonesTabComponent } from './project-milestones-tab.component';
 import { ProjectSubtasksTabComponent } from './project-subtasks-tab.component';
+import { ProjectWorkitemsTabComponent } from './project-workitems-tab.component';
 
 @Component({
   selector: 'app-project-detail',
@@ -19,7 +20,7 @@ import { ProjectSubtasksTabComponent } from './project-subtasks-tab.component';
   imports: [
     DatePipe, DecimalPipe, RouterLink, TabsModule, ButtonModule, KpiCardComponent,
     StatusBadgeComponent, ProjectTasksTabComponent, ProjectMilestonesTabComponent,
-    ProjectSubtasksTabComponent,
+    ProjectSubtasksTabComponent, ProjectWorkitemsTabComponent,
   ],
   template: `
     @if (project(); as p) {
@@ -41,6 +42,9 @@ import { ProjectSubtasksTabComponent } from './project-subtasks-tab.component';
           </p-tab>
           <p-tab value="3">Subtasks
             @if (subtaskCount() !== null) { <span class="tab-badge">{{ subtaskCount() }}</span> }
+          </p-tab>
+          <p-tab value="4">Work Items
+            @if (workItemCount() !== null) { <span class="tab-badge">{{ workItemCount() }}</span> }
           </p-tab>
         </p-tablist>
         <p-tabpanels>
@@ -91,6 +95,9 @@ import { ProjectSubtasksTabComponent } from './project-subtasks-tab.component';
             <app-project-subtasks-tab #subtasksTab [projectId]="p.id"
               (count)="subtaskCount.set($event)" />
           </p-tabpanel>
+          <p-tabpanel value="4">
+            <app-project-workitems-tab [projectId]="p.id" (count)="workItemCount.set($event)" />
+          </p-tabpanel>
         </p-tabpanels>
       </p-tabs>
     }
@@ -131,6 +138,7 @@ export class ProjectDetailComponent implements OnInit {
   readonly taskCount = signal<number | null>(null);
   readonly milestoneCount = signal<number | null>(null);
   readonly subtaskCount = signal<number | null>(null);
+  readonly workItemCount = signal<number | null>(null);
 
   /** Fases con fechas, en orden Dev→Hypercare, marcando la fase vigente hoy. */
   readonly phaseRows = computed(() => {

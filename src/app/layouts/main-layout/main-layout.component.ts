@@ -126,6 +126,7 @@ export class MainLayoutComponent {
     { label: 'Tickets', icon: 'pi-ticket', route: '/tickets' },
     { label: 'Leaves', icon: 'pi-calendar-minus', route: '/leaves' },
     { label: 'Notes', icon: 'pi-book', route: '/notes' },
+    { label: 'Continuous Improvement', icon: 'pi-sparkles', route: '/continuous-improvement' },
     { label: 'Team', icon: 'pi-users', route: '/team', roles: ['PMO Admin', 'Project Manager'] },
     { label: 'Sprint', icon: 'pi-bolt', route: '/sprint', roles: ['PMO Admin', 'Project Manager'] },
   ];

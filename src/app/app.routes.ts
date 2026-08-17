@@ -46,6 +46,12 @@ export const routes: Routes = [
             (m) => m.NoteListComponent),
       },
       {
+        path: 'continuous-improvement',
+        loadComponent: () =>
+          import('./features/continuous-improvement/work-item-list/work-item-list.component').then(
+            (m) => m.WorkItemListComponent),
+      },
+      {
         path: 'team',
         canActivate: [roleGuard([ROLES.ADMIN, ROLES.PM])],
         loadComponent: () =>
