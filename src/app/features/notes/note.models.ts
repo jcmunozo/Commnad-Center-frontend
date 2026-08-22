@@ -11,6 +11,9 @@ export interface Note {
   project: string | null;
   project_name: string | null;
   project_code: string | null;
+  work_item: string | null;
+  work_item_title: string | null;
+  work_item_code: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -24,6 +27,7 @@ export interface NoteWrite {
   priority?: string;
   status?: string;
   project?: string | null;
+  work_item?: string | null;
 }
 
 export const NOTE_CATEGORIES = [

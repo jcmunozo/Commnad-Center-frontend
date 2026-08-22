@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TableModule, TableLazyLoadEvent } from 'primeng/table';
@@ -16,6 +16,8 @@ import {
 } from '../note.models';
 import { ProjectService } from '../../projects/project.service';
 import { Project } from '../../projects/project.models';
+import { WorkItemService } from '../../continuous-improvement/work-item.services';
+import { WorkItem } from '../../continuous-improvement/work-item.models';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ConfirmService } from '../../../core/services/confirm.service';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
@@ -48,6 +50,9 @@ const STATUS_TOGGLE = [
         placeholder="Category" [showClear]="true" optionLabel="name" optionValue="code" />
       <p-select [options]="priorityOptions" [(ngModel)]="priorityFilter" (onChange)="reload()"
         placeholder="Priority" [showClear]="true" optionLabel="name" optionValue="code" />
+      <p-select [options]="linkOptions()" [(ngModel)]="linkFilter" (onChange)="reload()"
+        placeholder="Linked to" [showClear]="true" optionLabel="name" optionValue="id"
+        optionGroupLabel="label" optionGroupChildren="items" [filter]="true" />
       <p-selectbutton [options]="statusToggle" [(ngModel)]="statusFilter"
         (onChange)="reload()" [allowEmpty]="false" optionLabel="label" optionValue="value" />
       <p-button label="New note" icon="pi pi-plus" (onClick)="openCreate()" />
@@ -64,7 +69,7 @@ const STATUS_TOGGLE = [
           <th>Content</th>
           <th>Category</th>
           <th>Priority</th>
-          <th>Project</th>
+          <th>Linked to</th>
           <th pSortableColumn="due_date">Due date</th>
           <th pSortableColumn="created_at">Created</th>
           <th style="width:8rem"></th>
@@ -83,7 +88,12 @@ const STATUS_TOGGLE = [
           <td class="note-content-cell" [title]="n.content">{{ n.content || '—' }}</td>
           <td><app-status-badge [code]="n.category" [label]="label(categoryOptions, n.category)" /></td>
           <td><app-status-badge [code]="n.priority" [label]="label(priorityOptions, n.priority)" /></td>
-          <td>{{ n.project_name || '—' }}</td>
+          <td>
+            @if (n.project_name) { {{ n.project_name }} }
+            @else if (n.work_item_title) {
+              <span class="ci-tag" title="Continuous Improvement">{{ n.work_item_title }}</span>
+            } @else { — }
+          </td>
           <td>
             @if (n.due_date) {
               <span class="due" [class.due--overdue]="due(n) === 'overdue'"
@@ -139,8 +149,9 @@ const STATUS_TOGGLE = [
               [showClear]="true" appendTo="body" />
           </label>
           <label>Project
-            <p-select [options]="projects()" optionLabel="name" optionValue="id"
-              [(ngModel)]="formProject" [showClear]="true" placeholder="No project"
+            <p-select [options]="linkOptions()" optionLabel="name" optionValue="id"
+              optionGroupLabel="label" optionGroupChildren="items"
+              [(ngModel)]="formLink" [showClear]="true" placeholder="No project"
               [filter]="true" appendTo="body" />
           </label>
         </div>
@@ -178,11 +189,14 @@ const STATUS_TOGGLE = [
     .field-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
     .pin-check { flex-direction:row !important; align-items:center; gap:.5rem !important; }
     textarea { resize:vertical; font:inherit; }
+    .ci-tag { padding:.1rem .5rem; border-radius:1rem; font-size:.78rem;
+      background:rgba(57,135,229,.15); color:#7db2ec; }
   `],
 })
 export class NoteListComponent implements OnInit {
   private readonly service = inject(NoteService);
   private readonly projectsSvc = inject(ProjectService);
+  private readonly workItemsSvc = inject(WorkItemService);
   private readonly notify = inject(NotificationService);
   private readonly confirm = inject(ConfirmService);
 
@@ -190,6 +204,16 @@ export class NoteListComponent implements OnInit {
   readonly total = signal(0);
   readonly loading = signal(true);
   readonly projects = signal<Project[]>([]);
+  readonly workItems = signal<WorkItem[]>([]);
+
+  /** Combined "Linked to" options for both the filter and the dialog select:
+   *  Projects and Continuous Improvement work items share the same picker.
+   *  Values are prefixed ('project:<id>' / 'workitem:<id>') so a flat id
+   *  can't accidentally match the wrong kind. */
+  readonly linkOptions = computed(() => [
+    { label: 'Projects', items: this.projects().map((p) => ({ id: `project:${p.id}`, name: p.name })) },
+    { label: 'Continuous Improvement', items: this.workItems().map((w) => ({ id: `workitem:${w.id}`, name: w.title })) },
+  ]);
 
   readonly categoryOptions = NOTE_CATEGORIES;
   readonly priorityOptions = NOTE_PRIORITIES;
@@ -199,6 +223,7 @@ export class NoteListComponent implements OnInit {
   searchTerm = '';
   categoryFilter: string | null = null;
   priorityFilter: string | null = null;
+  linkFilter: string | null = null;
   statusFilter = 'OPEN';
   pageSize = 25;
   private page = 1;
@@ -214,13 +239,16 @@ export class NoteListComponent implements OnInit {
   formCategory = 'TODO';
   formPriority = 'MEDIUM';
   formDue: Date | null = null;
-  formProject: string | null = null;
+  /** Composite 'project:<id>' / 'workitem:<id>', parsed into the write body on save(). */
+  formLink: string | null = null;
   formPinned = false;
 
   ngOnInit() {
     this.reload();
     this.projectsSvc.list({ page_size: 200, ordering: 'name' })
       .subscribe((page) => this.projects.set(page.results));
+    this.workItemsSvc.list({ page_size: 200, ordering: 'title' })
+      .subscribe((page) => this.workItems.set(page.results));
   }
 
   label(options: { code: string; name: string }[], code: string) {
@@ -229,12 +257,15 @@ export class NoteListComponent implements OnInit {
 
   reload() {
     this.loading.set(true);
+    const project = this.linkFilter?.startsWith('project:') ? this.linkFilter.slice(8) : undefined;
+    const work_item = this.linkFilter?.startsWith('workitem:') ? this.linkFilter.slice(9) : undefined;
     this.service.list({
       page: this.page, page_size: this.pageSize, ordering: this.ordering,
       search: this.searchTerm || undefined,
       status: this.statusFilter === 'ALL' ? undefined : this.statusFilter,
       category: this.categoryFilter ?? undefined,
       priority: this.priorityFilter ?? undefined,
+      project, work_item,
     }).subscribe({
       next: (page) => {
         this.rows.set(page.results);
@@ -282,7 +313,7 @@ export class NoteListComponent implements OnInit {
     this.formCategory = 'TODO';
     this.formPriority = 'MEDIUM';
     this.formDue = null;
-    this.formProject = null;
+    this.formLink = null;
     this.formPinned = false;
     this.dialogOpen.set(true);
   }
@@ -294,7 +325,7 @@ export class NoteListComponent implements OnInit {
     this.formCategory = n.category;
     this.formPriority = n.priority;
     this.formDue = n.due_date ? new Date(`${n.due_date}T00:00:00`) : null;
-    this.formProject = n.project;
+    this.formLink = n.project ? `project:${n.project}` : n.work_item ? `workitem:${n.work_item}` : null;
     this.formPinned = n.pinned;
     this.dialogOpen.set(true);
   }
@@ -308,7 +339,8 @@ export class NoteListComponent implements OnInit {
       category: this.formCategory,
       priority: this.formPriority,
       due_date: this.formDue ? iso(this.formDue) : null,
-      project: this.formProject,
+      project: this.formLink?.startsWith('project:') ? this.formLink.slice(8) : null,
+      work_item: this.formLink?.startsWith('workitem:') ? this.formLink.slice(9) : null,
       pinned: this.formPinned,
     };
     const id = this.editingId();
