@@ -94,12 +94,20 @@ export class TeamService {
     return this.http.get<WorkloadRow[]>(`${environment.apiUrl}/resources/workload/`, { params });
   }
 
+  /**
+   * Builds a UTC timestamp for the SAME calendar date the user picked
+   * (00:00:00Z / 23:59:59Z), instead of the browser's local midnight
+   * converted to UTC — that conversion shifts the day for any timezone
+   * ahead of/behind UTC (e.g. 23:59:59 in America/Bogota, UTC-5, becomes
+   * 04:59:59 the *next* day in UTC, which the backend then reads as an
+   * extra working day when it does `period_end.date()`).
+   */
   private startOfDay(d: Date): string {
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0).toISOString();
+    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0)).toISOString();
   }
 
   private endOfDay(d: Date): string {
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59).toISOString();
+    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59)).toISOString();
   }
 
   /** 'YYYY-MM-DD' in local time (avoids UTC toISOString() shifting the day). */

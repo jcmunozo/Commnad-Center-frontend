@@ -116,7 +116,11 @@ function iso(d: Date): string {
       </aside>
     </div>
 
-    <h3 class="table-title">Upcoming &amp; ongoing leaves</h3>
+    <div class="table-title-row">
+      <h3 class="table-title">{{ showPast() ? 'All leaves' : 'Upcoming & ongoing leaves' }}</h3>
+      <p-button [label]="showPast() ? 'Show upcoming only' : 'Show past leaves'"
+        [text]="true" size="small" icon="pi pi-history" (onClick)="togglePast()" />
+    </div>
     <p-table [value]="leaves()" [loading]="loading()" dataKey="id">
       <ng-template pTemplate="header">
         <tr>
@@ -150,7 +154,7 @@ function iso(d: Date): string {
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td colspan="8">No upcoming leaves.</td></tr>
+        <tr><td colspan="8">{{ showPast() ? 'No leaves found.' : 'No upcoming leaves.' }}</td></tr>
       </ng-template>
     </p-table>
 
@@ -269,7 +273,9 @@ function iso(d: Date): string {
       padding:.15rem .55rem; border-radius:1rem; background:rgba(255,255,255,.05); }
     .empty { color:var(--pmo-muted); font-size:.85rem; }
 
-    .table-title { margin:1.5rem 0 .75rem; font-size:1rem; }
+    .table-title-row { display:flex; align-items:center; justify-content:space-between;
+      margin:1.5rem 0 .75rem; }
+    .table-title { margin:0; font-size:1rem; }
     .mono { font-variant-numeric:tabular-nums; }
     .notes-cell { max-width:220px; overflow:hidden; text-overflow:ellipsis;
       white-space:nowrap; color:var(--pmo-muted); }
@@ -308,6 +314,7 @@ export class LeavesComponent implements OnInit {
   readonly calendar = signal<Record<string, LeaveCalendarDay>>({});
   readonly selectedDate = signal<string | null>(this.todayIso);
   readonly leaves = signal<Leave[]>([]);
+  readonly showPast = signal(false);
   readonly employees = signal<Employee[]>([]);
   readonly loading = signal(true);
 
@@ -382,11 +389,19 @@ export class LeavesComponent implements OnInit {
 
   loadLeaves() {
     this.loading.set(true);
-    this.service.list({ date_from: this.todayIso, ordering: 'start_date', page_size: 100 })
+    const params = this.showPast()
+      ? { ordering: '-start_date', page_size: 100 }
+      : { date_from: this.todayIso, ordering: 'start_date', page_size: 100 };
+    this.service.list(params)
       .subscribe({
         next: (page) => { this.leaves.set(page.results); this.loading.set(false); },
         error: () => this.loading.set(false),
       });
+  }
+
+  togglePast() {
+    this.showPast.update((v) => !v);
+    this.loadLeaves();
   }
 
   /** Working days (Mon–Fri) covered by the leave; weekends don't count. */

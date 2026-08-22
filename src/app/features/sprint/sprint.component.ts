@@ -290,10 +290,11 @@ interface DayCell {
 
     .dialog-hint { color:var(--pmo-muted); font-size:.82rem; margin:.25rem 0 1rem; }
     .holiday-form { display:grid;
-      grid-template-columns:minmax(8rem,9.5rem) minmax(8rem,10rem) minmax(0,1fr) auto;
-      gap:.6rem; align-items:center; margin-bottom:1.25rem; }
+      grid-template-columns:minmax(7.5rem,9rem) minmax(7.5rem,9.5rem) minmax(0,1fr) auto;
+      gap:.9rem; align-items:center; margin-bottom:1.25rem; }
     .holiday-form > * { min-width:0; }
     .holiday-form input { width:100%; }
+    .holiday-form .p-button { margin-left:.15rem; }
     @media (max-width: 700px) { .holiday-form { grid-template-columns:1fr 1fr; } }
     .holiday-list-title { margin:0 0 .5rem; font-size:.85rem; color:var(--pmo-muted);
       font-weight:600; }
