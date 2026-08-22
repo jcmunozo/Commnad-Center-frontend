@@ -42,13 +42,16 @@ interface TaskForm {
     InputTextModule, InputNumberModule, DatePickerModule, StatusBadgeComponent,
   ],
   template: `
-    @if (canWrite()) {
-      <div class="tab-toolbar">
+    <div class="tab-toolbar">
+      <input pInputText placeholder="Search tasks…" [ngModel]="searchTerm()"
+        (ngModelChange)="searchTerm.set($event)" />
+      @if (canWrite()) {
+        <span class="spacer"></span>
         <p-button label="New task" icon="pi pi-plus" size="small" (onClick)="openCreate()" />
-      </div>
-    }
+      }
+    </div>
 
-    <p-table [value]="tasks()" [loading]="loading()" [paginator]="tasks().length > 10"
+    <p-table [value]="filteredTasks()" [loading]="loading()" [paginator]="filteredTasks().length > 10"
       [rows]="10" dataKey="id">
       <ng-template pTemplate="header">
         <tr>
@@ -77,7 +80,9 @@ interface TaskForm {
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td [attr.colspan]="canWrite() ? 8 : 7">No tasks yet.</td></tr>
+        <tr><td [attr.colspan]="canWrite() ? 8 : 7">
+          {{ searchTerm() ? 'No tasks match “' + searchTerm() + '”.' : 'No tasks yet.' }}
+        </td></tr>
       </ng-template>
     </p-table>
 
@@ -130,7 +135,8 @@ interface TaskForm {
     </p-dialog>
   `,
   styles: [`
-    .tab-toolbar { display:flex; justify-content:flex-end; margin-bottom:.75rem; }
+    .tab-toolbar { display:flex; align-items:center; gap:.75rem; margin-bottom:.75rem; }
+    .tab-toolbar .spacer { flex:1; }
     .row-actions { white-space:nowrap; }
     .icon-btn { background:none; border:none; cursor:pointer; color:var(--pmo-muted);
       padding:.25rem .4rem; font-size:.9rem; }
@@ -159,6 +165,11 @@ export class WorkItemTasksTabComponent implements OnInit {
   readonly tasks = signal<WorkItemTask[]>([]);
   readonly loading = signal(true);
   readonly devs = signal<Employee[]>([]);
+  readonly searchTerm = signal('');
+  readonly filteredTasks = computed(() => {
+    const q = this.searchTerm().trim().toLowerCase();
+    return q ? this.tasks().filter((t) => t.name.toLowerCase().includes(q)) : this.tasks();
+  });
 
   readonly canWrite = computed(() =>
     this.auth.hasAnyRole(['PMO Admin', 'Project Manager', 'Team Member']));

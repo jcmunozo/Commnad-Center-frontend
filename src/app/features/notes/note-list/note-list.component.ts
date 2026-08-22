@@ -5,7 +5,6 @@ import { TableModule, TableLazyLoadEvent } from 'primeng/table';
 import { InputTextModule } from 'primeng/inputtext';
 import { ButtonModule } from 'primeng/button';
 import { SelectModule } from 'primeng/select';
-import { SelectButtonModule } from 'primeng/selectbutton';
 import { DialogModule } from 'primeng/dialog';
 import { DatePickerModule } from 'primeng/datepicker';
 import { CheckboxModule } from 'primeng/checkbox';
@@ -38,7 +37,7 @@ const STATUS_TOGGLE = [
   standalone: true,
   imports: [
     DatePipe, FormsModule, TableModule, InputTextModule, ButtonModule,
-    SelectModule, SelectButtonModule, DialogModule, DatePickerModule,
+    SelectModule, DialogModule, DatePickerModule,
     CheckboxModule, StatusBadgeComponent,
   ],
   template: `
@@ -52,9 +51,9 @@ const STATUS_TOGGLE = [
         placeholder="Priority" [showClear]="true" optionLabel="name" optionValue="code" />
       <p-select [options]="linkOptions()" [(ngModel)]="linkFilter" (onChange)="reload()"
         placeholder="Linked to" [showClear]="true" optionLabel="name" optionValue="id"
-        optionGroupLabel="label" optionGroupChildren="items" [filter]="true" />
-      <p-selectbutton [options]="statusToggle" [(ngModel)]="statusFilter"
-        (onChange)="reload()" [allowEmpty]="false" optionLabel="label" optionValue="value" />
+        [group]="true" optionGroupLabel="label" optionGroupChildren="items" [filter]="true" />
+      <p-select [options]="statusToggle" [(ngModel)]="statusFilter" (onChange)="reload()"
+        optionLabel="label" optionValue="value" />
       <p-button label="New note" icon="pi pi-plus" (onClick)="openCreate()" />
     </div>
 
@@ -148,9 +147,9 @@ const STATUS_TOGGLE = [
             <p-datepicker [(ngModel)]="formDue" dateFormat="yy-mm-dd" [showIcon]="true"
               [showClear]="true" appendTo="body" />
           </label>
-          <label>Project
+          <label>Linked to
             <p-select [options]="linkOptions()" optionLabel="name" optionValue="id"
-              optionGroupLabel="label" optionGroupChildren="items"
+              [group]="true" optionGroupLabel="label" optionGroupChildren="items"
               [(ngModel)]="formLink" [showClear]="true" placeholder="No project"
               [filter]="true" appendTo="body" />
           </label>

@@ -57,12 +57,15 @@ interface MilestoneForm {
     <div class="panel-section">
       <div class="panel-head">
         <h4>Tasks</h4>
+        <input pInputText placeholder="Search tasks…" class="task-search" [ngModel]="searchTerm()"
+          (ngModelChange)="searchTerm.set($event)" />
+        <span class="spacer"></span>
         @if (canWrite()) {
           <p-button label="Add task" icon="pi pi-plus" size="small" text="true"
             (onClick)="openTask(null)" />
         }
       </div>
-      <p-table [value]="tasks()" [loading]="tasksLoading()" dataKey="id">
+      <p-table [value]="filteredTasks()" [loading]="tasksLoading()" dataKey="id">
         <ng-template pTemplate="header">
           <tr>
             <th>Code</th><th>Name</th><th>Dev</th><th>Status</th><th>Priority</th>
@@ -90,7 +93,9 @@ interface MilestoneForm {
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td [attr.colspan]="canWrite() ? 8 : 7">No tasks yet.</td></tr>
+          <tr><td [attr.colspan]="canWrite() ? 8 : 7">
+            {{ searchTerm() ? 'No tasks match “' + searchTerm() + '”.' : 'No tasks yet.' }}
+          </td></tr>
         </ng-template>
       </p-table>
     </div>
@@ -232,6 +237,8 @@ interface MilestoneForm {
   styles: [`
     .panel-section { padding:.75rem 1rem 1.25rem; }
     .panel-head { display:flex; align-items:center; gap:.6rem; margin-bottom:.5rem; }
+    .panel-head .spacer { flex:1; }
+    .task-search { max-width:16rem; }
     .panel-head h4 { margin:0; font-size:.85rem; text-transform:uppercase;
       letter-spacing:.04em; color:var(--pmo-muted); }
     .panel-head .hint { text-transform:none; letter-spacing:0; font-weight:400; font-size:.75rem; }
@@ -263,6 +270,11 @@ export class WorkItemDetailPanelComponent implements OnInit {
 
   readonly tasks = signal<WorkItemTask[]>([]);
   readonly tasksLoading = signal(true);
+  readonly searchTerm = signal('');
+  readonly filteredTasks = computed(() => {
+    const q = this.searchTerm().trim().toLowerCase();
+    return q ? this.tasks().filter((t) => t.name.toLowerCase().includes(q)) : this.tasks();
+  });
   readonly milestones = signal<WorkItemMilestone[]>([]);
   readonly milestonesLoading = signal(true);
   readonly devs = signal<Employee[]>([]);

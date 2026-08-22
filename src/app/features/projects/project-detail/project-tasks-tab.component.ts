@@ -42,13 +42,16 @@ interface TaskForm {
     StatusBadgeComponent,
   ],
   template: `
-    @if (canWrite()) {
-      <div class="tab-toolbar">
+    <div class="tab-toolbar">
+      <input pInputText placeholder="Search tasks…" [ngModel]="searchTerm()"
+        (ngModelChange)="searchTerm.set($event)" />
+      @if (canWrite()) {
+        <span class="spacer"></span>
         <p-button label="New task" icon="pi pi-plus" size="small" (onClick)="openCreate()" />
-      </div>
-    }
+      }
+    </div>
 
-    <p-table [value]="tasks()" [loading]="loading()" [paginator]="tasks().length > 10"
+    <p-table [value]="filteredTasks()" [loading]="loading()" [paginator]="filteredTasks().length > 10"
       [rows]="10" dataKey="id" sortField="planned_end" [sortOrder]="1"
       [expandedRowKeys]="expanded()" (onRowExpand)="loadSubtasks($event.data)">
       <ng-template pTemplate="header">
@@ -132,7 +135,9 @@ interface TaskForm {
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td [attr.colspan]="canWrite() ? 11 : 10">This project has no tasks.</td></tr>
+        <tr><td [attr.colspan]="canWrite() ? 11 : 10">
+          {{ searchTerm() ? 'No tasks match “' + searchTerm() + '”.' : 'This project has no tasks.' }}
+        </td></tr>
       </ng-template>
     </p-table>
 
@@ -208,7 +213,8 @@ interface TaskForm {
     </p-dialog>
   `,
   styles: [`
-    .tab-toolbar { display:flex; justify-content:flex-end; margin-bottom:.75rem; }
+    .tab-toolbar { display:flex; align-items:center; gap:.75rem; margin-bottom:.75rem; }
+    .tab-toolbar .spacer { flex:1; }
     .dev-cell, .row-actions { white-space:nowrap; }
     .icon-btn { background:none; border:none; cursor:pointer; color:var(--pmo-muted);
       padding:.25rem .4rem; font-size:.9rem; }
@@ -251,6 +257,15 @@ export class ProjectTasksTabComponent implements OnInit {
   readonly loading = signal(true);
   readonly devs = signal<Employee[]>([]);
   readonly expanded = signal<Record<string, boolean>>({});
+
+  /** Search box above the tab: matches this project's own tasks by name,
+   *  partial/case-insensitive. */
+  readonly searchTerm = signal('');
+  readonly filteredTasks = computed(() => {
+    const q = this.searchTerm().trim().toLowerCase();
+    return q ? this.tasks().filter((t) => t.name.toLowerCase().includes(q)) : this.tasks();
+  });
+
   readonly subtasksByTask = signal<Record<string, SubTask[]>>({});
 
   readonly canWrite = computed(() =>

@@ -14,9 +14,13 @@ export interface ProjectFilters {
   ordering: string;
 }
 
+// Least-complete first, completed/cancelled projects (status.is_closed) sink
+// to the bottom regardless of their progress_pct value.
+const DEFAULT_ORDERING = 'status__is_closed,progress_pct';
+
 const DEFAULTS: ProjectFilters = {
   search: '', status: null, client: null, favorite: false,
-  page: 1, page_size: 25, ordering: 'name',
+  page: 1, page_size: 25, ordering: DEFAULT_ORDERING,
 };
 
 /** Feature-scoped state for the project list (signals, no NgRx). */

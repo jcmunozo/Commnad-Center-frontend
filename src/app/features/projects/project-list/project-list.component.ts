@@ -143,7 +143,7 @@ export class ProjectListComponent implements OnInit {
     const page = Math.floor((e.first ?? 0) / (e.rows ?? 25)) + 1;
     const ordering = e.sortField
       ? `${e.sortOrder === -1 ? '-' : ''}${e.sortField}`
-      : 'name';
+      : this.store.filters().ordering;
     this.store.patchFilters({ page, page_size: e.rows ?? 25, ordering });
   }
 
