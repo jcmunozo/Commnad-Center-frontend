@@ -180,7 +180,7 @@ interface DayCell {
 
     <p-dialog header="Public holidays" [visible]="holidaysOpen()"
       (visibleChange)="holidaysOpen.set($event)" [modal]="true"
-      [style]="{width:'38rem'}" [draggable]="false">
+      [style]="{width:'38rem', maxWidth:'92vw'}" [draggable]="false">
       <p class="dialog-hint">One entry per country and date: everyone based in that
         country is off that day and leaves it out of the capacity math. Shown on both this
         calendar and the Leaves calendar.</p>
