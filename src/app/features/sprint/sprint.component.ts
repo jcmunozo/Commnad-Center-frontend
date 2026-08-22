@@ -292,7 +292,11 @@ interface DayCell {
     .holiday-form { display:grid;
       grid-template-columns:minmax(7.5rem,9rem) minmax(7.5rem,9.5rem) minmax(0,1fr) auto;
       gap:.9rem; align-items:center; margin-bottom:1.25rem; }
-    .holiday-form > * { min-width:0; }
+    /* Explicit margins in addition to grid gap: some PrimeNG form controls
+       ship their own default spacing that can visually cancel a grid gap, so
+       don't rely on gap alone to keep these fields apart. */
+    .holiday-form > * { min-width:0; margin-right:.9rem; margin-bottom:.6rem; }
+    .holiday-form > *:last-child { margin-right:0; }
     .holiday-form input { width:100%; }
     .holiday-form .p-button { margin-left:.15rem; }
     @media (max-width: 700px) { .holiday-form { grid-template-columns:1fr 1fr; } }
