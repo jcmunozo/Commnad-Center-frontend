@@ -15,6 +15,10 @@ export const PROJECT_PHASES: { code: PhaseCode; label: string; hint: string }[] 
   { code: 'HYPERCARE', label: 'Hypercare', hint: 'Post-go-live support' },
 ];
 
+export function phaseLabel(code: PhaseCode | null | undefined): string {
+  return PROJECT_PHASES.find((p) => p.code === code)?.label ?? '—';
+}
+
 export interface Project {
   id: string;
   legacy_code: string | null;
@@ -23,6 +27,8 @@ export interface Project {
   target_name: string;
   trigger_name: string;
   phases?: ProjectPhase[];
+  /** Delivery stage whose planned window covers today (list endpoint only; computed server-side). */
+  current_phase?: PhaseCode | null;
   project_type: string;
   status: string;
   priority: string;

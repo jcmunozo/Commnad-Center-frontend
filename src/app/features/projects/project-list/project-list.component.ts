@@ -9,6 +9,7 @@ import { SelectModule } from 'primeng/select';
 
 import { ProjectsStore } from '../projects.store';
 import { ProjectService } from '../project.service';
+import { phaseLabel } from '../project.models';
 import { CatalogsService } from '../../../core/services/catalogs.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ConfirmService } from '../../../core/services/confirm.service';
@@ -50,6 +51,7 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
           <th>Trigger</th>
           <th>Target</th>
           <th>Status</th>
+          <th>Stage</th>
           <th>Priority</th>
           <th>Health</th>
           <th pSortableColumn="progress_pct">Progress</th>
@@ -71,6 +73,7 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
           <td>{{ p.trigger_name || '—' }}</td>
           <td>{{ p.target_name || '—' }}</td>
           <td><app-status-badge [code]="p.status" [label]="catalogs.label('project-statuses', p.status)" /></td>
+          <td>@if (p.current_phase) { <app-status-badge [code]="p.current_phase" [label]="phaseLabel(p.current_phase)" /> } @else { <span class="muted">—</span> }</td>
           <td><app-status-badge [code]="p.priority" [label]="catalogs.label('severity-levels', p.priority)" /></td>
           <td>@if (p.health) { <app-status-badge [code]="p.health" [label]="p.health" /> }</td>
           <td>{{ p.progress_pct * 100 | number:'1.0-0' }}%</td>
@@ -84,7 +87,7 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td colspan="10">
+        <tr><td colspan="11">
           {{ store.filters().favorite ? 'No favorite projects yet — star one with the ★ column.' : 'No projects.' }}
         </td></tr>
       </ng-template>
@@ -92,6 +95,7 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
   `,
   styles: [`
     .spacer { flex:1; }
+    .muted { color:var(--pmo-muted); }
     .pmo-toolbar input, .pmo-toolbar p-select { min-width:180px; }
     .row-actions { white-space:nowrap; }
     .icon-btn { background:none; border:none; cursor:pointer; color:var(--pmo-muted);
@@ -129,6 +133,8 @@ export class ProjectListComponent implements OnInit {
       { header: 'Archive project', acceptLabel: 'Archive' },
     );
   }
+
+  readonly phaseLabel = phaseLabel;
 
   searchTerm = '';
   statusFilter: string | null = null;

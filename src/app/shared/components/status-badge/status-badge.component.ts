@@ -1,12 +1,14 @@
 import { Component, Input } from '@angular/core';
 import { TagModule } from 'primeng/tag';
 
-const SEVERITY_MAP: Record<string, 'success' | 'info' | 'warn' | 'danger'> = {
+const SEVERITY_MAP: Record<string, 'success' | 'secondary' | 'info' | 'warn' | 'danger' | 'contrast'> = {
   LOW: 'info', MEDIUM: 'warn', HIGH: 'danger', CRITICAL: 'danger',
   GREEN: 'success', YELLOW: 'warn', RED: 'danger',
   DONE: 'success', COMPLETED: 'success', BLOCKED: 'danger', CANCELLED: 'danger',
   IN_PROGRESS: 'info',
   WIP: 'info', PAUSED: 'warn', RESOLVED: 'success',
+  // Project delivery stage (Dev → Hypercare), see project.models.ts PhaseCode.
+  DEV: 'secondary', SIT: 'info', UAT: 'warn', HYPERCARE: 'danger', PROD: 'success',
 };
 
 @Component({
