@@ -91,12 +91,14 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
       <fieldset class="span-2 phases" formGroupName="phases">
         <legend>Timeline de fases</legend>
         @for (ph of phaseDefs; track ph.code) {
-          <div class="phase-row" [formGroupName]="ph.code">
+          <div class="phase-row" [class.phase-row--no-end]="ph.noEndDate" [formGroupName]="ph.code">
             <span class="phase-name" [title]="ph.hint">{{ ph.label }}</span>
             <p-datepicker formControlName="start" dateFormat="yy-mm-dd" [showIcon]="true"
               placeholder="Start" [showClear]="true" />
-            <p-datepicker formControlName="end" dateFormat="yy-mm-dd" [showIcon]="true"
-              placeholder="End" [showClear]="true" />
+            @if (!ph.noEndDate) {
+              <p-datepicker formControlName="end" dateFormat="yy-mm-dd" [showIcon]="true"
+                placeholder="End" [showClear]="true" />
+            }
           </div>
         }
       </fieldset>

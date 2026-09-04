@@ -7,7 +7,7 @@ const SEVERITY_MAP: Record<string, 'success' | 'secondary' | 'info' | 'warn' | '
   DONE: 'success', COMPLETED: 'success', BLOCKED: 'danger', CANCELLED: 'danger',
   IN_PROGRESS: 'info',
   WIP: 'info', PAUSED: 'warn', RESOLVED: 'success',
-  // Project delivery stage (Dev → Hypercare), see project.models.ts PhaseCode.
+  // Project delivery stage (Dev → Live, Hypercare before Live), see project.models.ts PhaseCode.
   DEV: 'secondary', SIT: 'info', UAT: 'warn', HYPERCARE: 'danger', PROD: 'success',
 };
 

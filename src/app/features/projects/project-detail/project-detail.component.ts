@@ -77,7 +77,11 @@ import { ProjectWorkitemsTabComponent } from './project-workitems-tab.component'
                     [class.phase--done]="ph.done" [title]="ph.hint">
                     <span class="phase__label">{{ ph.label }}</span>
                     <span class="phase__dates">
-                      {{ ph.start | date:'dd MMM' }} – {{ ph.end | date:'dd MMM' }}
+                      @if (ph.end) {
+                        {{ ph.start | date:'dd MMM' }} – {{ ph.end | date:'dd MMM' }}
+                      } @else {
+                        Desde {{ ph.start | date:'dd MMM' }}
+                      }
                     </span>
                   </div>
                 }
@@ -140,7 +144,7 @@ export class ProjectDetailComponent implements OnInit {
   readonly subtaskCount = signal<number | null>(null);
   readonly workItemCount = signal<number | null>(null);
 
-  /** Fases con fechas, en orden Dev→Hypercare, marcando la fase vigente hoy. */
+  /** Fases con fechas, en orden Dev→Live (Hypercare antes de Live), marcando la fase vigente hoy. */
   readonly phaseRows = computed(() => {
     const phases = this.project()?.phases ?? [];
     const now = Date.now();
