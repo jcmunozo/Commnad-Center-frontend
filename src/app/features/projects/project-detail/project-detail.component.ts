@@ -13,6 +13,7 @@ import { ProjectTasksTabComponent } from './project-tasks-tab.component';
 import { ProjectMilestonesTabComponent } from './project-milestones-tab.component';
 import { ProjectSubtasksTabComponent } from './project-subtasks-tab.component';
 import { ProjectWorkitemsTabComponent } from './project-workitems-tab.component';
+import { LinksPanelComponent } from '../../../shared/components/links-panel/links-panel.component';
 
 @Component({
   selector: 'app-project-detail',
@@ -20,7 +21,7 @@ import { ProjectWorkitemsTabComponent } from './project-workitems-tab.component'
   imports: [
     DatePipe, DecimalPipe, RouterLink, TabsModule, ButtonModule, KpiCardComponent,
     StatusBadgeComponent, ProjectTasksTabComponent, ProjectMilestonesTabComponent,
-    ProjectSubtasksTabComponent, ProjectWorkitemsTabComponent,
+    ProjectSubtasksTabComponent, ProjectWorkitemsTabComponent, LinksPanelComponent,
   ],
   template: `
     @if (project(); as p) {
@@ -46,6 +47,9 @@ import { ProjectWorkitemsTabComponent } from './project-workitems-tab.component'
           <p-tab value="4">Work Items
             @if (workItemCount() !== null) { <span class="tab-badge">{{ workItemCount() }}</span> }
           </p-tab>
+          <p-tab value="5">Links
+            @if (linkCount() !== null) { <span class="tab-badge">{{ linkCount() }}</span> }
+          </p-tab>
         </p-tablist>
         <p-tabpanels>
           <p-tabpanel value="0">
@@ -70,7 +74,7 @@ import { ProjectWorkitemsTabComponent } from './project-workitems-tab.component'
             </dl>
 
             @if (phaseRows().length) {
-              <h3 class="phases-title">Timeline de fases</h3>
+              <h3 class="phases-title">Phase timeline</h3>
               <div class="phases">
                 @for (ph of phaseRows(); track ph.code) {
                   <div class="phase" [class.phase--current]="ph.current"
@@ -80,7 +84,7 @@ import { ProjectWorkitemsTabComponent } from './project-workitems-tab.component'
                       @if (ph.end) {
                         {{ ph.start | date:'dd MMM' }} – {{ ph.end | date:'dd MMM' }}
                       } @else {
-                        Desde {{ ph.start | date:'dd MMM' }}
+                        Since {{ ph.start | date:'dd MMM' }}
                       }
                     </span>
                   </div>
@@ -101,6 +105,9 @@ import { ProjectWorkitemsTabComponent } from './project-workitems-tab.component'
           </p-tabpanel>
           <p-tabpanel value="4">
             <app-project-workitems-tab [projectId]="p.id" (count)="workItemCount.set($event)" />
+          </p-tabpanel>
+          <p-tabpanel value="5">
+            <app-links-panel ownerType="project" [ownerId]="p.id" (count)="linkCount.set($event)" />
           </p-tabpanel>
         </p-tabpanels>
       </p-tabs>
@@ -143,6 +150,7 @@ export class ProjectDetailComponent implements OnInit {
   readonly milestoneCount = signal<number | null>(null);
   readonly subtaskCount = signal<number | null>(null);
   readonly workItemCount = signal<number | null>(null);
+  readonly linkCount = signal<number | null>(null);
 
   /** Fases con fechas, en orden Dev→Live (Hypercare antes de Live), marcando la fase vigente hoy. */
   readonly phaseRows = computed(() => {

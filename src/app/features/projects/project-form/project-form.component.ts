@@ -36,7 +36,7 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
     <form [formGroup]="form" (ngSubmit)="submit()" class="form-grid">
       <label>Name *
         <input pInputText formControlName="name" />
-        @if (invalid('name')) { <small class="err">Requerido</small> }
+        @if (invalid('name')) { <small class="err">Required</small> }
       </label>
 
       <label class="span-2">Description
@@ -77,19 +77,22 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
       <label>Planned end
         <p-datepicker formControlName="planned_end" dateFormat="yy-mm-dd" [showIcon]="true" />
       </label>
+      @if (isPlanning()) {
+        <small class="hint span-2">Dates can't be set while status is Planning.</small>
+      }
 
       <label>Progress %
         <p-inputNumber formControlName="progress_pct" [min]="0" [max]="100" suffix="%"
           [minFractionDigits]="0" [maxFractionDigits]="2" />
-        @if (invalid('progress_pct')) { <small class="err">Debe estar entre 0 y 100</small> }
+        @if (invalid('progress_pct')) { <small class="err">Must be between 0 and 100</small> }
       </label>
 
       @if (form.errors?.['endBeforeStart']) {
-        <small class="err span-2">El fin planeado no puede ser anterior al inicio.</small>
+        <small class="err span-2">Planned end can't be before the start date.</small>
       }
 
       <fieldset class="span-2 phases" formGroupName="phases">
-        <legend>Timeline de fases</legend>
+        <legend>Phase timeline</legend>
         @for (ph of phaseDefs; track ph.code) {
           <div class="phase-row" [class.phase-row--no-end]="ph.noEndDate" [formGroupName]="ph.code">
             <span class="phase-name" [title]="ph.hint">{{ ph.label }}</span>
@@ -120,6 +123,7 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
     .phases legend { font-size:.8rem; color:var(--pmo-muted); text-transform:uppercase; padding:0 .5rem; }
     .phase-row { display:grid; grid-template-columns:110px 1fr 1fr; gap:.75rem; align-items:center; margin-bottom:.5rem; }
     .phase-name { font-weight:600; font-size:.85rem; }
+    .hint { color:var(--pmo-warn); font-size:.78rem; margin:-.5rem 0 0; }
   `],
 })
 export class ProjectFormComponent implements OnInit {
@@ -132,6 +136,9 @@ export class ProjectFormComponent implements OnInit {
   private readonly notify = inject(NotificationService);
 
   readonly saving = signal(false);
+  /** Planning: the project's dates aren't ours to set yet (may not even happen) —
+   *  kept read-only rather than cleared, since the value may already be known. */
+  readonly isPlanning = signal(false);
 
   readonly phaseDefs = PROJECT_PHASES;
 
@@ -159,6 +166,9 @@ export class ProjectFormComponent implements OnInit {
   );
 
   ngOnInit() {
+    this.syncPlanningLock(this.form.controls.status.value);
+    this.form.controls.status.valueChanges.subscribe((status) => this.syncPlanningLock(status));
+
     const id = this.id();
     if (id) {
       this.service.get(id).subscribe(({ phases: _phases, ...p }) =>
@@ -178,6 +188,20 @@ export class ProjectFormComponent implements OnInit {
           });
         }
       });
+    }
+  }
+
+  /** Dates stay read-only (not cleared) while status is Planning: a Planning
+   *  project's timeline isn't ours to set, but a value already on record
+   *  (or one that's simply known ahead of time) shouldn't be wiped. Covers
+   *  the top-level dates plus every phase (Dev/SIT/UAT/Hypercare/Prod). */
+  private syncPlanningLock(status: string) {
+    this.isPlanning.set(status === 'PLANNING');
+    const method = status === 'PLANNING' ? 'disable' : 'enable';
+    this.form.controls.start_date[method]({ emitEvent: false });
+    this.form.controls.planned_end[method]({ emitEvent: false });
+    for (const ph of this.phaseDefs) {
+      this.form.get(['phases', ph.code])?.[method]({ emitEvent: false });
     }
   }
 
@@ -210,7 +234,7 @@ export class ProjectFormComponent implements OnInit {
       switchMap((p) => forkJoin([of(p), this.service.savePhases(id ?? p.id, phaseRows)])),
     );
     req.subscribe({
-      next: () => { this.notify.success('Project guardado'); this.router.navigate(['/projects']); },
+      next: () => { this.notify.success('Project saved'); this.router.navigate(['/projects']); },
       error: () => this.saving.set(false),
     });
   }

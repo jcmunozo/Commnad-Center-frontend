@@ -167,18 +167,23 @@ interface TaskForm {
         </label>
         <label>Planned start
           <p-datepicker [(ngModel)]="form.planned_start" dateFormat="yy-mm-dd" [showIcon]="true"
-            appendTo="body" />
+            [disabled]="form.status === 'PLANNING'" appendTo="body" />
         </label>
         <label>Planned end
           <p-datepicker [(ngModel)]="form.planned_end" dateFormat="yy-mm-dd" [showIcon]="true"
-            appendTo="body" />
+            [disabled]="form.status === 'PLANNING'" appendTo="body" />
         </label>
         <label>Estimated hours
-          <p-inputNumber [(ngModel)]="form.estimated_hours" [min]="0" [maxFractionDigits]="1" />
+          <p-inputNumber [(ngModel)]="form.estimated_hours" [min]="0" [maxFractionDigits]="1"
+            [disabled]="form.status === 'PLANNING'" />
         </label>
         <label>Progress %
           <p-inputNumber [(ngModel)]="form.progress" [min]="0" [max]="100" suffix="%" />
         </label>
+        @if (form.status === 'PLANNING') {
+          <small class="hint span-2">Dates and estimated hours can't be set while status is
+            Planning.</small>
+        }
         <label class="span-2">Notes
           <textarea pInputText [(ngModel)]="form.notes" rows="2"></textarea>
         </label>
@@ -376,7 +381,7 @@ export class ProjectTasksTabComponent implements OnInit {
       }),
     ).subscribe({
       next: () => {
-        this.notify.success(id ? 'Tarea actualizada' : 'Tarea creada');
+        this.notify.success(id ? 'Task updated' : 'Task created');
         this.saving.set(false);
         this.dialogOpen.set(false);
         this.load();
@@ -390,7 +395,7 @@ export class ProjectTasksTabComponent implements OnInit {
     this.confirm.danger(
       `Delete task ${t.legacy_code ?? ''} "${t.name}"?`,
       () => this.service.remove(t.id).subscribe(() => {
-        this.notify.success('Tarea eliminada');
+        this.notify.success('Task deleted');
         this.load();
         this.changed.emit();
       }),
@@ -413,7 +418,7 @@ export class ProjectTasksTabComponent implements OnInit {
       next: (assignees) => {
         this.tasks.update((list) =>
           list.map((t) => (t.id === task.id ? { ...t, assignees } : t)));
-        this.notify.success('Tarea reasignada');
+        this.notify.success('Task reassigned');
         this.saving.set(false);
         this.reassignOpen.set(false);
         this.changed.emit();

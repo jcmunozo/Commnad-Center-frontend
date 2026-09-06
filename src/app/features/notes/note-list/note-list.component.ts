@@ -20,6 +20,7 @@ import { WorkItem } from '../../continuous-improvement/work-item.models';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ConfirmService } from '../../../core/services/confirm.service';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { LinksPanelComponent } from '../../../shared/components/links-panel/links-panel.component';
 
 function iso(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
@@ -38,7 +39,7 @@ const STATUS_TOGGLE = [
   imports: [
     DatePipe, FormsModule, TableModule, InputTextModule, ButtonModule,
     SelectModule, DialogModule, DatePickerModule,
-    CheckboxModule, StatusBadgeComponent,
+    CheckboxModule, StatusBadgeComponent, LinksPanelComponent,
   ],
   template: `
     <div class="pmo-toolbar">
@@ -158,6 +159,13 @@ const STATUS_TOGGLE = [
           <p-checkbox [(ngModel)]="formPinned" [binary]="true" inputId="notePinned" />
           <span>Pin this note (shows on the dashboard)</span>
         </label>
+        <label>Links
+          @if (editingId(); as id) {
+            <app-links-panel ownerType="note" [ownerId]="id" />
+          } @else {
+            <small class="hint">Save the note first to add links.</small>
+          }
+        </label>
       </div>
       <ng-template pTemplate="footer">
         <p-button label="Cancel" severity="secondary" (onClick)="dialogOpen.set(false)" />
@@ -190,6 +198,7 @@ const STATUS_TOGGLE = [
     textarea { resize:vertical; font:inherit; }
     .ci-tag { padding:.1rem .5rem; border-radius:1rem; font-size:.78rem;
       background:rgba(57,135,229,.15); color:#7db2ec; }
+    .hint { color:var(--pmo-muted); font-size:.8rem; }
   `],
 })
 export class NoteListComponent implements OnInit {

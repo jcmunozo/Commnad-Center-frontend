@@ -111,18 +111,23 @@ interface TaskForm {
         </label>
         <label>Planned start
           <p-datepicker [(ngModel)]="form.planned_start" dateFormat="yy-mm-dd" [showIcon]="true"
-            appendTo="body" />
+            [disabled]="form.status === 'PLANNING'" appendTo="body" />
         </label>
         <label>Planned end
           <p-datepicker [(ngModel)]="form.planned_end" dateFormat="yy-mm-dd" [showIcon]="true"
-            appendTo="body" />
+            [disabled]="form.status === 'PLANNING'" appendTo="body" />
         </label>
         <label>Estimated hours
-          <p-inputNumber [(ngModel)]="form.estimated_hours" [min]="0" [maxFractionDigits]="1" />
+          <p-inputNumber [(ngModel)]="form.estimated_hours" [min]="0" [maxFractionDigits]="1"
+            [disabled]="form.status === 'PLANNING'" />
         </label>
         <label>Actual hours
           <p-inputNumber [(ngModel)]="form.actual_hours" [min]="0" [maxFractionDigits]="1" />
         </label>
+        @if (form.status === 'PLANNING') {
+          <small class="hint span-2">Dates and estimated hours can't be set while status is
+            Planning.</small>
+        }
         <label class="span-2">Notes
           <textarea pInputText [(ngModel)]="form.notes" rows="2"></textarea>
         </label>
@@ -147,6 +152,7 @@ interface TaskForm {
       color:var(--pmo-muted); }
     .span-2 { grid-column:span 2; }
     textarea { resize:vertical; font:inherit; }
+    .hint { display:block; margin-top:.75rem; color:var(--pmo-warn); font-size:.78rem; }
   `],
 })
 export class WorkItemTasksTabComponent implements OnInit {

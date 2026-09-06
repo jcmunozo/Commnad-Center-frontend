@@ -15,13 +15,14 @@ import { NotificationService } from '../../../core/services/notification.service
 import { ConfirmService } from '../../../core/services/confirm.service';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { LinksPanelComponent } from '../../../shared/components/links-panel/links-panel.component';
 
 @Component({
   selector: 'app-ticket-list',
   standalone: true,
   imports: [
     DatePipe, DecimalPipe, FormsModule, TableModule, InputTextModule,
-    ButtonModule, SelectModule, DialogModule, StatusBadgeComponent,
+    ButtonModule, SelectModule, DialogModule, StatusBadgeComponent, LinksPanelComponent,
   ],
   template: `
     <div class="pmo-toolbar">
@@ -103,6 +104,13 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
             [(ngModel)]="formAssignee" [showClear]="true" placeholder="Unassigned"
             appendTo="body" />
         </label>
+        <label>Links
+          @if (editingId(); as id) {
+            <app-links-panel ownerType="ticket" [ownerId]="id" />
+          } @else {
+            <small class="hint">Save the ticket first to add links.</small>
+          }
+        </label>
       </div>
       <ng-template pTemplate="footer">
         <p-button label="Cancel" severity="secondary" (onClick)="dialogOpen.set(false)" />
@@ -124,6 +132,7 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
     .dialog-form label { display:flex; flex-direction:column; gap:.35rem; font-size:.85rem;
       color:var(--pmo-muted); }
     textarea { resize:vertical; font:inherit; }
+    .hint { color:var(--pmo-muted); font-size:.8rem; }
   `],
 })
 export class TicketListComponent implements OnInit {

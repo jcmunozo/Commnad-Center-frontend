@@ -19,6 +19,7 @@ import { NotificationService } from '../../core/services/notification.service';
 import { ConfirmService } from '../../core/services/confirm.service';
 import { AuthStore } from '../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../shared/components/status-badge/status-badge.component';
+import { LinksPanelComponent } from '../../shared/components/links-panel/links-panel.component';
 
 interface TaskForm {
   name: string;
@@ -52,6 +53,7 @@ interface MilestoneForm {
   imports: [
     DatePipe, DecimalPipe, FormsModule, TableModule, ButtonModule, DialogModule, SelectModule,
     MultiSelectModule, InputTextModule, InputNumberModule, DatePickerModule, StatusBadgeComponent,
+    LinksPanelComponent,
   ],
   template: `
     <div class="panel-section">
@@ -144,6 +146,11 @@ interface MilestoneForm {
       </p-table>
     </div>
 
+    <div class="panel-section">
+      <div class="panel-head"><h4>Links</h4></div>
+      <app-links-panel ownerType="work_item" [ownerId]="workItemId()" />
+    </div>
+
     <!-- Diálogo tarea -->
     <p-dialog [header]="editingTask() ? 'Edit task' : 'New task'" [visible]="taskDialogOpen()"
       (visibleChange)="taskDialogOpen.set($event)" [modal]="true" [style]="{width:'32rem'}"
@@ -170,18 +177,23 @@ interface MilestoneForm {
         </label>
         <label>Planned start
           <p-datepicker [(ngModel)]="taskForm.planned_start" dateFormat="yy-mm-dd" [showIcon]="true"
-            appendTo="body" />
+            [disabled]="taskForm.status === 'PLANNING'" appendTo="body" />
         </label>
         <label>Planned end
           <p-datepicker [(ngModel)]="taskForm.planned_end" dateFormat="yy-mm-dd" [showIcon]="true"
-            appendTo="body" />
+            [disabled]="taskForm.status === 'PLANNING'" appendTo="body" />
         </label>
         <label>Estimated hours
-          <p-inputNumber [(ngModel)]="taskForm.estimated_hours" [min]="0" [maxFractionDigits]="1" />
+          <p-inputNumber [(ngModel)]="taskForm.estimated_hours" [min]="0" [maxFractionDigits]="1"
+            [disabled]="taskForm.status === 'PLANNING'" />
         </label>
         <label>Actual hours
           <p-inputNumber [(ngModel)]="taskForm.actual_hours" [min]="0" [maxFractionDigits]="1" />
         </label>
+        @if (taskForm.status === 'PLANNING') {
+          <small class="hint span-2">Dates and estimated hours can't be set while status is
+            Planning.</small>
+        }
         <label class="span-2">Notes
           <textarea pInputText [(ngModel)]="taskForm.notes" rows="2"></textarea>
         </label>

@@ -12,6 +12,7 @@ import { WorkItemService } from '../work-item.services';
 import { WorkItem, WorkItemWrite } from '../work-item.models';
 import { WorkItemTasksTabComponent } from './work-item-tasks-tab.component';
 import { WorkItemMilestonesTabComponent } from './work-item-milestones-tab.component';
+import { LinksPanelComponent } from '../../../shared/components/links-panel/links-panel.component';
 import { ProjectService } from '../../projects/project.service';
 import { Project } from '../../projects/project.models';
 import { CatalogsService } from '../../../core/services/catalogs.service';
@@ -29,6 +30,7 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
   imports: [
     DatePipe, RouterLink, FormsModule, TabsModule, ButtonModule, DialogModule, SelectModule,
     InputTextModule, StatusBadgeComponent, WorkItemTasksTabComponent, WorkItemMilestonesTabComponent,
+    LinksPanelComponent,
   ],
   template: `
     @if (workItem(); as wi) {
@@ -54,6 +56,9 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
           <p-tab value="2">Milestones
             @if (milestoneCount() !== null) { <span class="tab-badge">{{ milestoneCount() }}</span> }
           </p-tab>
+          <p-tab value="3">Links
+            @if (linkCount() !== null) { <span class="tab-badge">{{ linkCount() }}</span> }
+          </p-tab>
         </p-tablist>
         <p-tabpanels>
           <p-tabpanel value="0">
@@ -74,6 +79,9 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
           </p-tabpanel>
           <p-tabpanel value="2">
             <app-work-item-milestones-tab [workItemId]="wi.id" (count)="milestoneCount.set($event)" />
+          </p-tabpanel>
+          <p-tabpanel value="3">
+            <app-links-panel ownerType="work_item" [ownerId]="wi.id" (count)="linkCount.set($event)" />
           </p-tabpanel>
         </p-tabpanels>
       </p-tabs>
@@ -146,6 +154,7 @@ export class WorkItemDetailComponent implements OnInit {
   // Contadores emitidos por cada pestaña al cargar su data (badges del tablist).
   readonly taskCount = signal<number | null>(null);
   readonly milestoneCount = signal<number | null>(null);
+  readonly linkCount = signal<number | null>(null);
 
   readonly canWrite = computed(() =>
     this.auth.hasAnyRole(['PMO Admin', 'Project Manager', 'Team Member']));
