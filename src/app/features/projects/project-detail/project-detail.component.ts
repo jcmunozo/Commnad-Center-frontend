@@ -1,6 +1,5 @@
-import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, input, OnInit, signal, viewChild } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
 import { TabsModule } from 'primeng/tabs';
 import { ButtonModule } from 'primeng/button';
 
@@ -14,22 +13,29 @@ import { ProjectMilestonesTabComponent } from './project-milestones-tab.componen
 import { ProjectSubtasksTabComponent } from './project-subtasks-tab.component';
 import { ProjectWorkitemsTabComponent } from './project-workitems-tab.component';
 import { LinksPanelComponent } from '../../../shared/components/links-panel/links-panel.component';
+import { ProjectFormDialogComponent } from '../project-form-dialog.component';
+import { AuthStore } from '../../../core/auth/auth.store';
+import { BackLinkComponent } from '../../../shared/components/back-link/back-link.component';
 
 @Component({
   selector: 'app-project-detail',
   standalone: true,
   imports: [
-    DatePipe, DecimalPipe, RouterLink, TabsModule, ButtonModule, KpiCardComponent,
+    DatePipe, DecimalPipe, TabsModule, ButtonModule, KpiCardComponent,
     StatusBadgeComponent, ProjectTasksTabComponent, ProjectMilestonesTabComponent,
     ProjectSubtasksTabComponent, ProjectWorkitemsTabComponent, LinksPanelComponent,
+    ProjectFormDialogComponent, BackLinkComponent,
   ],
   template: `
     @if (project(); as p) {
       <div class="pmo-toolbar">
-        <h2>{{ p.legacy_code }} · {{ p.name }}</h2>
+        <app-back-link to="/projects" label="Back to Projects" />
+        <h2>{{ p.name }}</h2>
         <app-status-badge [code]="p.status" [label]="catalogs.label('project-statuses', p.status)" />
         <span class="spacer"></span>
-        <p-button label="Edit" icon="pi pi-pencil" [routerLink]="['/projects', p.id, 'edit']" />
+        @if (canWrite()) {
+          <p-button label="Edit" icon="pi pi-pencil" (onClick)="formDialog()?.open(p.id)" />
+        }
       </div>
 
       <p-tabs value="0">
@@ -46,9 +52,6 @@ import { LinksPanelComponent } from '../../../shared/components/links-panel/link
           </p-tab>
           <p-tab value="4">Work Items
             @if (workItemCount() !== null) { <span class="tab-badge">{{ workItemCount() }}</span> }
-          </p-tab>
-          <p-tab value="5">Links
-            @if (linkCount() !== null) { <span class="tab-badge">{{ linkCount() }}</span> }
           </p-tab>
         </p-tablist>
         <p-tabpanels>
@@ -91,6 +94,9 @@ import { LinksPanelComponent } from '../../../shared/components/links-panel/link
                 }
               </div>
             }
+
+            <h3 class="phases-title">Links</h3>
+            <app-links-panel ownerType="project" [ownerId]="p.id" />
           </p-tabpanel>
           <p-tabpanel value="1">
             <app-project-tasks-tab [projectId]="p.id" (count)="taskCount.set($event)"
@@ -106,12 +112,11 @@ import { LinksPanelComponent } from '../../../shared/components/links-panel/link
           <p-tabpanel value="4">
             <app-project-workitems-tab [projectId]="p.id" (count)="workItemCount.set($event)" />
           </p-tabpanel>
-          <p-tabpanel value="5">
-            <app-links-panel ownerType="project" [ownerId]="p.id" (count)="linkCount.set($event)" />
-          </p-tabpanel>
         </p-tabpanels>
       </p-tabs>
     }
+
+    <app-project-form-dialog (saved)="load()" />
   `,
   styles: [`
     .spacer { flex:1; }
@@ -141,6 +146,10 @@ export class ProjectDetailComponent implements OnInit {
 
   private readonly service = inject(ProjectService);
   readonly catalogs = inject(CatalogsService);
+  private readonly auth = inject(AuthStore);
+  readonly formDialog = viewChild(ProjectFormDialogComponent);
+
+  readonly canWrite = computed(() => this.auth.hasAnyRole(['PMO Admin', 'Project Manager']));
 
   readonly project = signal<Project | null>(null);
   readonly dashboard = signal<ProjectDashboard | null>(null);
@@ -150,7 +159,6 @@ export class ProjectDetailComponent implements OnInit {
   readonly milestoneCount = signal<number | null>(null);
   readonly subtaskCount = signal<number | null>(null);
   readonly workItemCount = signal<number | null>(null);
-  readonly linkCount = signal<number | null>(null);
 
   /** Fases con fechas, en orden Dev→Live (Hypercare antes de Live), marcando la fase vigente hoy. */
   readonly phaseRows = computed(() => {
@@ -174,7 +182,11 @@ export class ProjectDetailComponent implements OnInit {
   });
 
   ngOnInit() {
-    this.service.get(this.id()).subscribe((p) => this.project.set(p));
+    this.load();
     this.service.dashboard(this.id()).subscribe((d) => this.dashboard.set(d));
+  }
+
+  load() {
+    this.service.get(this.id()).subscribe((p) => this.project.set(p));
   }
 }

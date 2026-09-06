@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal, viewChild } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TableModule, TableLazyLoadEvent } from 'primeng/table';
@@ -6,6 +6,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { ButtonModule } from 'primeng/button';
 import { SelectModule } from 'primeng/select';
 import { DialogModule } from 'primeng/dialog';
+import { of, switchMap } from 'rxjs';
 
 import { TicketService } from '../ticket.service';
 import { Ticket, TicketWrite } from '../ticket.models';
@@ -43,6 +44,7 @@ import { LinksPanelComponent } from '../../../shared/components/links-panel/link
       [loading]="loading()" [rowsPerPageOptions]="[10, 25, 50]" dataKey="id">
       <ng-template pTemplate="header">
         <tr>
+          <th>#</th>
           <th pSortableColumn="ticket_number">Ticket #</th>
           <th>Name</th>
           <th>Priority</th>
@@ -53,10 +55,14 @@ import { LinksPanelComponent } from '../../../shared/components/links-panel/link
           @if (canManage()) { <th style="width:6rem"></th> }
         </tr>
       </ng-template>
-      <ng-template pTemplate="body" let-t>
-        <tr>
+      <ng-template pTemplate="body" let-t let-rowIndex="rowIndex">
+        <tr class="row--clickable" [class.row--archived]="t.is_active === false" (click)="openView(t)">
+          <td>{{ rowIndex + 1 }}</td>
           <td class="ticket-number">{{ t.ticket_number }}</td>
-          <td>{{ t.name }}</td>
+          <td>
+            {{ t.name }}
+            @if (t.is_active === false) { <span class="archived-tag">Archived</span> }
+          </td>
           <td><app-status-badge [code]="t.priority" [label]="catalogs.label('severity-levels', t.priority)" /></td>
           <td><app-status-badge [code]="t.status" [label]="catalogs.label('ticket-statuses', t.status)" /></td>
           <td>{{ t.assignee_name || '—' }}</td>
@@ -64,16 +70,18 @@ import { LinksPanelComponent } from '../../../shared/components/links-panel/link
           <td>{{ t.created_at | date:'dd/MM/yyyy' }}</td>
           @if (canManage()) {
             <td class="row-actions">
-              <button type="button" class="icon-btn" title="Edit" (click)="openEdit(t)">
+              <button type="button" class="icon-btn" title="Edit" (click)="$event.stopPropagation(); openEdit(t)">
                 <i class="pi pi-pencil"></i></button>
-              <button type="button" class="icon-btn icon-btn--danger" title="Archive"
-                (click)="archive(t)"><i class="pi pi-trash"></i></button>
+              @if (t.is_active !== false) {
+                <button type="button" class="icon-btn icon-btn--danger" title="Archive"
+                  (click)="$event.stopPropagation(); archive(t)"><i class="pi pi-trash"></i></button>
+              }
             </td>
           }
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td [attr.colspan]="canManage() ? 8 : 7">No tickets.</td></tr>
+        <tr><td [attr.colspan]="canManage() ? 9 : 8">No tickets.</td></tr>
       </ng-template>
     </p-table>
 
@@ -104,18 +112,48 @@ import { LinksPanelComponent } from '../../../shared/components/links-panel/link
             [(ngModel)]="formAssignee" [showClear]="true" placeholder="Unassigned"
             appendTo="body" />
         </label>
-        <label>Links
-          @if (editingId(); as id) {
-            <app-links-panel ownerType="ticket" [ownerId]="id" />
-          } @else {
-            <small class="hint">Save the ticket first to add links.</small>
-          }
-        </label>
+        <div class="field-block">Links
+          <app-links-panel ownerType="ticket" [ownerId]="editingId()" [singleColumn]="true" />
+        </div>
       </div>
       <ng-template pTemplate="footer">
         <p-button label="Cancel" severity="secondary" (onClick)="dialogOpen.set(false)" />
         <p-button label="Save" [disabled]="!formValid() || saving()"
           [loading]="saving()" (onClick)="save()" />
+      </ng-template>
+    </p-dialog>
+
+    <!-- Read-only detail view: opened by clicking a row, no editing here. -->
+    <p-dialog header="Ticket details" [visible]="viewOpen()" (visibleChange)="viewOpen.set($event)"
+      [modal]="true" [dismissableMask]="true" [style]="{width:'34rem'}" [draggable]="false">
+      @if (viewing(); as t) {
+        <div class="view-grid">
+          <div class="view-row"><span class="vlabel">Ticket #</span><span>{{ t.ticket_number }}</span></div>
+          <div class="view-row"><span class="vlabel">Name</span><span>{{ t.name }}</span></div>
+          <div class="view-row">
+            <span class="vlabel">Priority</span>
+            <app-status-badge [code]="t.priority" [label]="catalogs.label('severity-levels', t.priority)" />
+          </div>
+          <div class="view-row">
+            <span class="vlabel">Status</span>
+            <app-status-badge [code]="t.status" [label]="catalogs.label('ticket-statuses', t.status)" />
+          </div>
+          <div class="view-row"><span class="vlabel">Developer</span><span>{{ t.assignee_name || '—' }}</span></div>
+          <div class="view-row"><span class="vlabel">Invested hours</span><span>{{ t.invested_hours | number:'1.0-1' }}h</span></div>
+          <div class="view-row"><span class="vlabel">Created</span><span>{{ t.created_at | date:'dd/MM/yyyy' }}</span></div>
+          <div class="view-row"><span class="vlabel">Archived</span><span>{{ t.is_active === false ? 'Yes' : 'No' }}</span></div>
+          <div class="view-row span-2">
+            <span class="vlabel">Description</span>
+            <p class="view-content">{{ viewDescription() === null ? 'Loading…' : (viewDescription() || '—') }}</p>
+          </div>
+          <div class="view-row span-2">
+            <span class="vlabel">Links</span>
+            <app-links-panel ownerType="ticket" [ownerId]="t.id" [viewOnly]="true" [singleColumn]="true" />
+          </div>
+        </div>
+      }
+      <ng-template pTemplate="footer">
+        <p-button label="Close" severity="secondary" (onClick)="viewOpen.set(false)" />
       </ng-template>
     </p-dialog>
   `,
@@ -128,11 +166,21 @@ import { LinksPanelComponent } from '../../../shared/components/links-panel/link
       padding:.25rem .4rem; font-size:.9rem; }
     .icon-btn:hover { color:var(--pmo-primary); }
     .icon-btn--danger:hover { color:var(--pmo-danger); }
+    .row--archived { opacity:.6; }
+    .row--clickable { cursor:pointer; }
+    .row--clickable:hover { background:var(--surface-bg); }
+    .archived-tag { margin-left:.5rem; padding:.05rem .5rem; border-radius:1rem;
+      font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.03em;
+      background:rgba(220,38,38,.12); color:var(--pmo-danger); }
     .dialog-form { display:flex; flex-direction:column; gap:1rem; padding-top:.25rem; }
-    .dialog-form label { display:flex; flex-direction:column; gap:.35rem; font-size:.85rem;
-      color:var(--pmo-muted); }
+    .dialog-form label, .dialog-form .field-block { display:flex; flex-direction:column; gap:.35rem;
+      font-size:.85rem; color:var(--pmo-muted); }
     textarea { resize:vertical; font:inherit; }
-    .hint { color:var(--pmo-muted); font-size:.8rem; }
+    .view-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; padding-top:.25rem; }
+    .view-row { display:flex; flex-direction:column; gap:.3rem; min-width:0; }
+    .view-row.span-2 { grid-column:span 2; }
+    .vlabel { font-size:.75rem; text-transform:uppercase; letter-spacing:.03em; color:var(--pmo-muted); }
+    .view-content { margin:0; white-space:pre-wrap; word-break:break-word; font-size:.9rem; }
   `],
 })
 export class TicketListComponent implements OnInit {
@@ -141,6 +189,7 @@ export class TicketListComponent implements OnInit {
   private readonly notify = inject(NotificationService);
   private readonly confirm = inject(ConfirmService);
   private readonly auth = inject(AuthStore);
+  private readonly linksPanel = viewChild(LinksPanelComponent);
   readonly catalogs = inject(CatalogsService);
 
   readonly rows = signal<Ticket[]>([]);
@@ -172,6 +221,12 @@ export class TicketListComponent implements OnInit {
   formPriority: string | null = null;
   formStatus = 'WIP';
   formAssignee: string | null = null;
+
+  // read-only detail view, opened by clicking a row
+  readonly viewOpen = signal(false);
+  readonly viewing = signal<Ticket | null>(null);
+  /** null while the detail (description) is still being fetched. */
+  readonly viewDescription = signal<string | null>(null);
 
   ngOnInit() {
     this.reload();
@@ -222,7 +277,19 @@ export class TicketListComponent implements OnInit {
     this.formPriority = null;
     this.formStatus = 'WIP';
     this.formAssignee = null;
+    this.linksPanel()?.resetDrafts();
     this.dialogOpen.set(true);
+  }
+
+  openView(t: Ticket) {
+    this.viewing.set(t);
+    this.viewDescription.set(null);
+    this.viewOpen.set(true);
+    // The list serializer doesn't include description: fetch the detail for it.
+    this.service.get(t.id).subscribe((full) => {
+      if (this.viewing()?.id !== t.id) return;
+      this.viewDescription.set(full.description ?? '');
+    });
   }
 
   openEdit(t: Ticket) {
@@ -252,7 +319,9 @@ export class TicketListComponent implements OnInit {
       assignee: this.formAssignee,
     };
     const id = this.editingId();
-    const upsert$ = id ? this.service.update(id, body) : this.service.create(body);
+    const upsert$ = (id ? this.service.update(id, body) : this.service.create(body)).pipe(
+      switchMap((t) => this.linksPanel()?.flush(id ?? t.id) ?? of(null)),
+    );
     upsert$.subscribe({
       next: () => {
         this.notify.success(id ? 'Ticket updated' : 'Ticket created');

@@ -20,6 +20,7 @@ import { ConfirmService } from '../../core/services/confirm.service';
 import { AuthStore } from '../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../shared/components/status-badge/status-badge.component';
 import { LinksPanelComponent } from '../../shared/components/links-panel/links-panel.component';
+import { ShortCodePipe } from '../../shared/pipes/short-code.pipe';
 
 interface TaskForm {
   name: string;
@@ -53,7 +54,7 @@ interface MilestoneForm {
   imports: [
     DatePipe, DecimalPipe, FormsModule, TableModule, ButtonModule, DialogModule, SelectModule,
     MultiSelectModule, InputTextModule, InputNumberModule, DatePickerModule, StatusBadgeComponent,
-    LinksPanelComponent,
+    LinksPanelComponent, ShortCodePipe,
   ],
   template: `
     <div class="panel-section">
@@ -70,14 +71,14 @@ interface MilestoneForm {
       <p-table [value]="filteredTasks()" [loading]="tasksLoading()" dataKey="id">
         <ng-template pTemplate="header">
           <tr>
-            <th>Code</th><th>Name</th><th>Dev</th><th>Status</th><th>Priority</th>
+            <th>#</th><th>Name</th><th>Dev</th><th>Status</th><th>Priority</th>
             <th>Hours</th><th>Progress</th>
             @if (canWrite()) { <th style="width:6rem"></th> }
           </tr>
         </ng-template>
-        <ng-template pTemplate="body" let-t>
-          <tr>
-            <td>{{ t.legacy_code }}</td>
+        <ng-template pTemplate="body" let-t let-rowIndex="rowIndex">
+          <tr class="row--clickable" (click)="openTaskView(t)">
+            <td>{{ rowIndex + 1 }}</td>
             <td>{{ t.name }}</td>
             <td>{{ t.assignee_name || '—' }}</td>
             <td><app-status-badge [code]="t.status" [label]="catalogs.label('task-statuses', t.status)" /></td>
@@ -86,10 +87,10 @@ interface MilestoneForm {
             <td>{{ t.progress_pct * 100 | number:'1.0-0' }}%</td>
             @if (canWrite()) {
               <td class="row-actions">
-                <button type="button" class="icon-btn" title="Edit" (click)="openTask(t)">
+                <button type="button" class="icon-btn" title="Edit" (click)="$event.stopPropagation(); openTask(t)">
                   <i class="pi pi-pencil"></i></button>
                 <button type="button" class="icon-btn icon-btn--danger" title="Delete"
-                  (click)="removeTask(t)"><i class="pi pi-trash"></i></button>
+                  (click)="$event.stopPropagation(); removeTask(t)"><i class="pi pi-trash"></i></button>
               </td>
             }
           </tr>
@@ -113,14 +114,14 @@ interface MilestoneForm {
       <p-table [value]="milestones()" [loading]="milestonesLoading()" dataKey="id">
         <ng-template pTemplate="header">
           <tr>
-            <th>Code</th><th>Name</th><th>Target date</th><th>Actual date</th>
+            <th>#</th><th>Name</th><th>Target date</th><th>Actual date</th>
             <th>Owner</th><th>Derived status</th>
             @if (canWrite()) { <th style="width:6rem"></th> }
           </tr>
         </ng-template>
-        <ng-template pTemplate="body" let-m>
+        <ng-template pTemplate="body" let-m let-rowIndex="rowIndex">
           <tr>
-            <td>{{ m.legacy_code }}</td>
+            <td>{{ rowIndex + 1 }}</td>
             <td>{{ m.name }}</td>
             <td>{{ m.target_date | date }}</td>
             <td>{{ m.actual_date | date }}</td>
@@ -205,6 +206,38 @@ interface MilestoneForm {
       </ng-template>
     </p-dialog>
 
+    <!-- Read-only detail view: opened by clicking a row, no editing here. -->
+    <p-dialog header="Task details" [visible]="taskViewOpen()" (visibleChange)="taskViewOpen.set($event)"
+      [modal]="true" [dismissableMask]="true" [style]="{width:'32rem'}" [draggable]="false" appendTo="body">
+      @if (viewingTask(); as t) {
+        <div class="view-grid">
+          <div class="view-row"><span class="vlabel">#</span><span>{{ t.legacy_code | shortCode }}</span></div>
+          <div class="view-row span-2"><span class="vlabel">Name</span><span>{{ t.name }}</span></div>
+          <div class="view-row"><span class="vlabel">Dev</span><span>{{ t.assignee_name || '—' }}</span></div>
+          <div class="view-row">
+            <span class="vlabel">Status</span>
+            <app-status-badge [code]="t.status" [label]="catalogs.label('task-statuses', t.status)" />
+          </div>
+          <div class="view-row">
+            <span class="vlabel">Priority</span>
+            <app-status-badge [code]="t.priority" [label]="catalogs.label('severity-levels', t.priority)" />
+          </div>
+          <div class="view-row"><span class="vlabel">Planned start</span><span>{{ t.planned_start ? (t.planned_start | date) : '—' }}</span></div>
+          <div class="view-row"><span class="vlabel">Planned end</span><span>{{ t.planned_end ? (t.planned_end | date) : '—' }}</span></div>
+          <div class="view-row"><span class="vlabel">Estimated hours</span><span>{{ t.estimated_hours ?? '—' }}</span></div>
+          <div class="view-row"><span class="vlabel">Actual hours</span><span>{{ t.actual_hours ?? '—' }}</span></div>
+          <div class="view-row"><span class="vlabel">Progress</span><span>{{ t.progress_pct * 100 | number:'1.0-0' }}%</span></div>
+          <div class="view-row span-2">
+            <span class="vlabel">Notes</span>
+            <p class="view-content">{{ t.notes || '—' }}</p>
+          </div>
+        </div>
+      }
+      <ng-template pTemplate="footer">
+        <p-button label="Close" severity="secondary" (onClick)="taskViewOpen.set(false)" />
+      </ng-template>
+    </p-dialog>
+
     <!-- Diálogo milestone -->
     <p-dialog [header]="editingMilestone() ? 'Edit milestone' : 'New milestone'"
       [visible]="milestoneDialogOpen()" (visibleChange)="milestoneDialogOpen.set($event)"
@@ -255,6 +288,12 @@ interface MilestoneForm {
       letter-spacing:.04em; color:var(--pmo-muted); }
     .panel-head .hint { text-transform:none; letter-spacing:0; font-weight:400; font-size:.75rem; }
     .row-actions { white-space:nowrap; }
+    .row--clickable { cursor:pointer; }
+    .row--clickable:hover { background:var(--surface-bg); }
+    .view-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; padding-top:.25rem; }
+    .view-row { display:flex; flex-direction:column; gap:.3rem; min-width:0; }
+    .vlabel { font-size:.75rem; text-transform:uppercase; letter-spacing:.03em; color:var(--pmo-muted); }
+    .view-content { margin:0; white-space:pre-wrap; word-break:break-word; font-size:.9rem; }
     .icon-btn { background:none; border:none; cursor:pointer; color:var(--pmo-muted);
       padding:.25rem .4rem; font-size:.9rem; }
     .icon-btn:hover { color:var(--pmo-primary); }
@@ -300,6 +339,10 @@ export class WorkItemDetailPanelComponent implements OnInit {
   readonly editingTask = signal<WorkItemTask | null>(null);
   taskForm: TaskForm = this.emptyTaskForm();
 
+  // read-only detail view, opened by clicking a row
+  readonly taskViewOpen = signal(false);
+  readonly viewingTask = signal<WorkItemTask | null>(null);
+
   readonly milestoneDialogOpen = signal(false);
   readonly editingMilestone = signal<WorkItemMilestone | null>(null);
   milestoneForm: MilestoneForm = this.emptyMilestoneForm();
@@ -342,6 +385,11 @@ export class WorkItemDetailPanelComponent implements OnInit {
         next: (p) => { this.milestones.set(p.results); this.milestonesLoading.set(false); },
         error: () => this.milestonesLoading.set(false),
       });
+  }
+
+  openTaskView(t: WorkItemTask) {
+    this.viewingTask.set(t);
+    this.taskViewOpen.set(true);
   }
 
   openTask(t: WorkItemTask | null) {

@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnInit } from '@angular/core';
+import { Component, computed, inject, OnInit, viewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -15,6 +15,7 @@ import { NotificationService } from '../../../core/services/notification.service
 import { ConfirmService } from '../../../core/services/confirm.service';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { ProjectFormDialogComponent } from '../project-form-dialog.component';
 
 @Component({
   selector: 'app-project-list',
@@ -22,7 +23,7 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
   providers: [ProjectsStore],
   imports: [
     DecimalPipe, RouterLink, FormsModule, TableModule, InputTextModule, ButtonModule,
-    SelectModule, StatusBadgeComponent,
+    SelectModule, StatusBadgeComponent, ProjectFormDialogComponent,
   ],
   template: `
     <div class="pmo-toolbar">
@@ -37,7 +38,9 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
         <i class="pi" [class.pi-star-fill]="store.filters().favorite"
           [class.pi-star]="!store.filters().favorite"></i> Favorites
       </button>
-      <p-button label="New" icon="pi pi-plus" routerLink="/projects/new" />
+      @if (canWrite()) {
+        <p-button label="New" icon="pi pi-plus" (onClick)="formDialog()?.open(null)" />
+      }
     </div>
 
     <p-table [value]="store.items()" [lazy]="true" (onLazyLoad)="onLazyLoad($event)"
@@ -46,7 +49,7 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
       <ng-template pTemplate="header">
         <tr>
           <th style="width:2.5rem"></th>
-          <th pSortableColumn="legacy_code">Code</th>
+          <th pSortableColumn="legacy_code">#</th>
           <th pSortableColumn="name">Name</th>
           <th>Trigger</th>
           <th>Target</th>
@@ -58,8 +61,8 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
           <th></th>
         </tr>
       </ng-template>
-      <ng-template pTemplate="body" let-p>
-        <tr>
+      <ng-template pTemplate="body" let-p let-rowIndex="rowIndex">
+        <tr [class.row--archived]="p.is_active === false">
           <td>
             <button type="button" class="star-btn" [class.star-btn--on]="p.is_favorite"
               [title]="p.is_favorite ? 'Remove from favorites' : 'Add to favorites'"
@@ -68,8 +71,11 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
                 [class.pi-star]="!p.is_favorite"></i>
             </button>
           </td>
-          <td>{{ p.legacy_code }}</td>
-          <td><a [routerLink]="['/projects', p.id]">{{ p.name }}</a></td>
+          <td>{{ rowIndex + 1 }}</td>
+          <td>
+            <a [routerLink]="['/projects', p.id]">{{ p.name }}</a>
+            @if (p.is_active === false) { <span class="archived-tag">Archived</span> }
+          </td>
           <td>{{ p.trigger_name || '—' }}</td>
           <td>{{ p.target_name || '—' }}</td>
           <td><app-status-badge [code]="p.status" [label]="catalogs.label('project-statuses', p.status)" /></td>
@@ -78,10 +84,13 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
           <td>@if (p.health) { <app-status-badge [code]="p.health" [label]="p.health" /> }</td>
           <td>{{ p.progress_pct * 100 | number:'1.0-0' }}%</td>
           <td class="row-actions">
-            <a [routerLink]="['/projects', p.id, 'edit']" title="Edit"><i class="pi pi-pencil"></i></a>
-            @if (canArchive()) {
-              <button type="button" class="icon-btn icon-btn--danger" title="Archive"
-                (click)="archive(p)"><i class="pi pi-trash"></i></button>
+            @if (canWrite()) {
+              <button type="button" class="icon-btn" title="Edit" (click)="formDialog()?.open(p.id)">
+                <i class="pi pi-pencil"></i></button>
+              @if (p.is_active !== false) {
+                <button type="button" class="icon-btn icon-btn--danger" title="Archive"
+                  (click)="archive(p)"><i class="pi pi-trash"></i></button>
+              }
             }
           </td>
         </tr>
@@ -92,6 +101,8 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
         </td></tr>
       </ng-template>
     </p-table>
+
+    <app-project-form-dialog (saved)="store.load()" />
   `,
   styles: [`
     .spacer { flex:1; }
@@ -111,6 +122,10 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
     .fav-filter:hover { border-color:#fab219; color:#fab219; }
     .fav-filter--on { border-color:rgba(250,178,25,.6); color:#fab219;
       background:rgba(250,178,25,.08); }
+    .row--archived { opacity:.6; }
+    .archived-tag { margin-left:.5rem; padding:.05rem .5rem; border-radius:1rem;
+      font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.03em;
+      background:rgba(220,38,38,.12); color:var(--pmo-danger); }
   `],
 })
 export class ProjectListComponent implements OnInit {
@@ -120,8 +135,9 @@ export class ProjectListComponent implements OnInit {
   private readonly notify = inject(NotificationService);
   private readonly confirm = inject(ConfirmService);
   private readonly auth = inject(AuthStore);
+  readonly formDialog = viewChild(ProjectFormDialogComponent);
 
-  readonly canArchive = computed(() => this.auth.hasAnyRole(['PMO Admin', 'Project Manager']));
+  readonly canWrite = computed(() => this.auth.hasAnyRole(['PMO Admin', 'Project Manager']));
 
   archive(p: { id: string; legacy_code: string | null; name: string }) {
     this.confirm.danger(

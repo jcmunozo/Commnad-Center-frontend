@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal, viewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -8,6 +8,7 @@ import { ButtonModule } from 'primeng/button';
 import { SelectModule } from 'primeng/select';
 import { DialogModule } from 'primeng/dialog';
 import { TagModule } from 'primeng/tag';
+import { of, switchMap } from 'rxjs';
 
 import { WorkItemService } from '../work-item.services';
 import { WorkItem, WorkItemWrite } from '../work-item.models';
@@ -18,13 +19,14 @@ import { NotificationService } from '../../../core/services/notification.service
 import { ConfirmService } from '../../../core/services/confirm.service';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { LinksPanelComponent } from '../../../shared/components/links-panel/links-panel.component';
 
 @Component({
   selector: 'app-work-item-list',
   standalone: true,
   imports: [
     DatePipe, RouterLink, FormsModule, TableModule, InputTextModule, ButtonModule, SelectModule,
-    DialogModule, TagModule, StatusBadgeComponent,
+    DialogModule, TagModule, StatusBadgeComponent, LinksPanelComponent,
   ],
   template: `
     <div class="pmo-toolbar">
@@ -45,7 +47,7 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
       [rowsPerPageOptions]="[10, 25, 50]" dataKey="id">
       <ng-template pTemplate="header">
         <tr>
-          <th>Code</th>
+          <th>#</th>
           <th pSortableColumn="title">Title</th>
           <th>Project</th>
           <th>Status</th>
@@ -55,10 +57,13 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
           @if (canWrite()) { <th style="width:6rem"></th> }
         </tr>
       </ng-template>
-      <ng-template pTemplate="body" let-wi>
-        <tr>
-          <td>{{ wi.legacy_code }}</td>
-          <td><a [routerLink]="['/continuous-improvement', wi.id]">{{ wi.title }}</a></td>
+      <ng-template pTemplate="body" let-wi let-rowIndex="rowIndex">
+        <tr [class.row--archived]="wi.is_active === false">
+          <td>{{ rowIndex + 1 }}</td>
+          <td>
+            <a [routerLink]="['/continuous-improvement', wi.id]">{{ wi.title }}</a>
+            @if (wi.is_active === false) { <span class="archived-tag">Archived</span> }
+          </td>
           <td>{{ wi.project_name || '—' }}</td>
           <td><app-status-badge [code]="wi.status" [label]="catalogs.label('project-statuses', wi.status)" /></td>
           <td><app-status-badge [code]="wi.priority" [label]="catalogs.label('severity-levels', wi.priority)" /></td>
@@ -71,8 +76,10 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
             <td class="row-actions">
               <button type="button" class="icon-btn" title="Edit" (click)="openEdit(wi)">
                 <i class="pi pi-pencil"></i></button>
-              <button type="button" class="icon-btn icon-btn--danger" title="Archive"
-                (click)="archive(wi)"><i class="pi pi-trash"></i></button>
+              @if (wi.is_active !== false) {
+                <button type="button" class="icon-btn icon-btn--danger" title="Archive"
+                  (click)="archive(wi)"><i class="pi pi-trash"></i></button>
+              }
             </td>
           }
         </tr>
@@ -107,6 +114,9 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
             [(ngModel)]="formProject" [showClear]="true" placeholder="No project — internal work"
             [filter]="true" appendTo="body" />
         </label>
+        <div class="field-block">Links
+          <app-links-panel ownerType="work_item" [ownerId]="editingId()" [singleColumn]="true" />
+        </div>
       </div>
       <ng-template pTemplate="footer">
         <p-button label="Cancel" severity="secondary" (onClick)="dialogOpen.set(false)" />
@@ -123,12 +133,16 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
       padding:.25rem .4rem; font-size:.9rem; }
     .icon-btn:hover { color:var(--pmo-primary); }
     .icon-btn--danger:hover { color:var(--pmo-danger); }
+    .row--archived { opacity:.6; }
+    .archived-tag { margin-left:.5rem; padding:.05rem .5rem; border-radius:1rem;
+      font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.03em;
+      background:rgba(220,38,38,.12); color:var(--pmo-danger); }
     .count-tag { box-sizing:border-box !important; display:inline-block !important;
       width:1.6rem !important; height:1.6rem !important; padding:0 !important;
       border-radius:50% !important; line-height:1.6rem !important; text-align:center !important; }
     .dialog-form { display:flex; flex-direction:column; gap:1rem; padding-top:.25rem; }
-    .dialog-form label { display:flex; flex-direction:column; gap:.35rem; font-size:.85rem;
-      color:var(--pmo-muted); }
+    .dialog-form label, .dialog-form .field-block { display:flex; flex-direction:column; gap:.35rem;
+      font-size:.85rem; color:var(--pmo-muted); }
     .dim { font-weight:400; font-size:.75rem; }
     .field-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
     textarea { resize:vertical; font:inherit; }
@@ -140,6 +154,7 @@ export class WorkItemListComponent implements OnInit {
   private readonly notify = inject(NotificationService);
   private readonly confirm = inject(ConfirmService);
   private readonly auth = inject(AuthStore);
+  private readonly linksPanel = viewChild(LinksPanelComponent);
   readonly catalogs = inject(CatalogsService);
 
   readonly rows = signal<WorkItem[]>([]);
@@ -213,17 +228,24 @@ export class WorkItemListComponent implements OnInit {
     this.formStatus = 'PLANNING';
     this.formPriority = 'MEDIUM';
     this.formProject = null;
+    this.linksPanel()?.resetDrafts();
     this.dialogOpen.set(true);
   }
 
   openEdit(wi: WorkItem) {
     this.editingId.set(wi.id);
     this.formTitle = wi.title;
-    this.formDescription = wi.description ?? '';
+    this.formDescription = '';
     this.formStatus = wi.status;
     this.formPriority = wi.priority;
     this.formProject = wi.project;
     this.dialogOpen.set(true);
+    // The list serializer doesn't include description: fetch the detail for it,
+    // so saving from here doesn't blank it out.
+    this.service.get(wi.id).subscribe((full) => {
+      if (this.editingId() !== wi.id) return;
+      this.formDescription = full.description ?? '';
+    });
   }
 
   save() {
@@ -237,7 +259,9 @@ export class WorkItemListComponent implements OnInit {
       project: this.formProject,
     };
     const id = this.editingId();
-    const upsert$ = id ? this.service.update(id, body) : this.service.create(body);
+    const upsert$ = (id ? this.service.update(id, body) : this.service.create(body)).pipe(
+      switchMap((w) => this.linksPanel()?.flush(id ?? w.id) ?? of(null)),
+    );
     upsert$.subscribe({
       next: () => {
         this.notify.success(id ? 'Work item updated' : 'Work item created');

@@ -37,18 +37,18 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
       <ng-template pTemplate="header">
         <tr>
           <th style="width:2.5rem"></th>
-          <th>Code</th><th>Title</th><th>Status</th><th>Priority</th><th style="width:5rem">Tasks</th>
+          <th>#</th><th>Title</th><th>Status</th><th>Priority</th><th style="width:5rem">Tasks</th>
           @if (canWrite()) { <th style="width:6rem"></th> }
         </tr>
       </ng-template>
-      <ng-template pTemplate="body" let-wi let-expanded="expanded">
+      <ng-template pTemplate="body" let-wi let-expanded="expanded" let-rowIndex="rowIndex">
         <tr>
           <td>
             <button type="button" pButton class="p-button-text p-button-rounded" [pRowToggler]="wi">
               <i class="pi" [class.pi-chevron-down]="expanded" [class.pi-chevron-right]="!expanded"></i>
             </button>
           </td>
-          <td>{{ wi.legacy_code }}</td>
+          <td>{{ rowIndex + 1 }}</td>
           <td>{{ wi.title }}</td>
           <td><app-status-badge [code]="wi.status" [label]="catalogs.label('project-statuses', wi.status)" /></td>
           <td><app-status-badge [code]="wi.priority" [label]="catalogs.label('severity-levels', wi.priority)" /></td>

@@ -1,5 +1,5 @@
 import { Component, computed, inject, input, OnInit, output, signal } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
@@ -17,6 +17,7 @@ import { NotificationService } from '../../../core/services/notification.service
 import { ConfirmService } from '../../../core/services/confirm.service';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { ShortCodePipe } from '../../../shared/pipes/short-code.pipe';
 
 interface TaskForm {
   name: string;
@@ -38,8 +39,8 @@ interface TaskForm {
   selector: 'app-work-item-tasks-tab',
   standalone: true,
   imports: [
-    DecimalPipe, FormsModule, TableModule, ButtonModule, DialogModule, SelectModule,
-    InputTextModule, InputNumberModule, DatePickerModule, StatusBadgeComponent,
+    DatePipe, DecimalPipe, FormsModule, TableModule, ButtonModule, DialogModule, SelectModule,
+    InputTextModule, InputNumberModule, DatePickerModule, StatusBadgeComponent, ShortCodePipe,
   ],
   template: `
     <div class="tab-toolbar">
@@ -55,14 +56,14 @@ interface TaskForm {
       [rows]="10" dataKey="id">
       <ng-template pTemplate="header">
         <tr>
-          <th>Code</th><th>Name</th><th>Dev</th><th>Status</th><th>Priority</th>
+          <th>#</th><th>Name</th><th>Dev</th><th>Status</th><th>Priority</th>
           <th>Hours</th><th>Progress</th>
           @if (canWrite()) { <th style="width:6rem"></th> }
         </tr>
       </ng-template>
-      <ng-template pTemplate="body" let-t>
-        <tr>
-          <td>{{ t.legacy_code }}</td>
+      <ng-template pTemplate="body" let-t let-rowIndex="rowIndex">
+        <tr class="row--clickable" (click)="openView(t)">
+          <td>{{ rowIndex + 1 }}</td>
           <td>{{ t.name }}</td>
           <td>{{ t.assignee_name || '—' }}</td>
           <td><app-status-badge [code]="t.status" [label]="catalogs.label('task-statuses', t.status)" /></td>
@@ -71,10 +72,10 @@ interface TaskForm {
           <td>{{ t.progress_pct * 100 | number:'1.0-0' }}%</td>
           @if (canWrite()) {
             <td class="row-actions">
-              <button type="button" class="icon-btn" title="Edit" (click)="openEdit(t)">
+              <button type="button" class="icon-btn" title="Edit" (click)="$event.stopPropagation(); openEdit(t)">
                 <i class="pi pi-pencil"></i></button>
               <button type="button" class="icon-btn icon-btn--danger" title="Delete"
-                (click)="remove(t)"><i class="pi pi-trash"></i></button>
+                (click)="$event.stopPropagation(); remove(t)"><i class="pi pi-trash"></i></button>
             </td>
           }
         </tr>
@@ -138,11 +139,45 @@ interface TaskForm {
           (onClick)="save()" />
       </ng-template>
     </p-dialog>
+
+    <!-- Read-only detail view: opened by clicking a row, no editing here. -->
+    <p-dialog header="Task details" [visible]="viewOpen()" (visibleChange)="viewOpen.set($event)"
+      [modal]="true" [dismissableMask]="true" [style]="{width:'32rem'}" [draggable]="false">
+      @if (viewing(); as t) {
+        <div class="view-grid">
+          <div class="view-row"><span class="vlabel">#</span><span>{{ t.legacy_code | shortCode }}</span></div>
+          <div class="view-row span-2"><span class="vlabel">Name</span><span>{{ t.name }}</span></div>
+          <div class="view-row"><span class="vlabel">Dev</span><span>{{ t.assignee_name || '—' }}</span></div>
+          <div class="view-row">
+            <span class="vlabel">Status</span>
+            <app-status-badge [code]="t.status" [label]="catalogs.label('task-statuses', t.status)" />
+          </div>
+          <div class="view-row">
+            <span class="vlabel">Priority</span>
+            <app-status-badge [code]="t.priority" [label]="catalogs.label('severity-levels', t.priority)" />
+          </div>
+          <div class="view-row"><span class="vlabel">Planned start</span><span>{{ t.planned_start ? (t.planned_start | date) : '—' }}</span></div>
+          <div class="view-row"><span class="vlabel">Planned end</span><span>{{ t.planned_end ? (t.planned_end | date) : '—' }}</span></div>
+          <div class="view-row"><span class="vlabel">Estimated hours</span><span>{{ t.estimated_hours ?? '—' }}</span></div>
+          <div class="view-row"><span class="vlabel">Actual hours</span><span>{{ t.actual_hours ?? '—' }}</span></div>
+          <div class="view-row"><span class="vlabel">Progress</span><span>{{ t.progress_pct * 100 | number:'1.0-0' }}%</span></div>
+          <div class="view-row span-2">
+            <span class="vlabel">Notes</span>
+            <p class="view-content">{{ t.notes || '—' }}</p>
+          </div>
+        </div>
+      }
+      <ng-template pTemplate="footer">
+        <p-button label="Close" severity="secondary" (onClick)="viewOpen.set(false)" />
+      </ng-template>
+    </p-dialog>
   `,
   styles: [`
     .tab-toolbar { display:flex; align-items:center; gap:.75rem; margin-bottom:.75rem; }
     .tab-toolbar .spacer { flex:1; }
     .row-actions { white-space:nowrap; }
+    .row--clickable { cursor:pointer; }
+    .row--clickable:hover { background:var(--surface-bg); }
     .icon-btn { background:none; border:none; cursor:pointer; color:var(--pmo-muted);
       padding:.25rem .4rem; font-size:.9rem; }
     .icon-btn:hover { color:var(--pmo-primary); }
@@ -153,6 +188,10 @@ interface TaskForm {
     .span-2 { grid-column:span 2; }
     textarea { resize:vertical; font:inherit; }
     .hint { display:block; margin-top:.75rem; color:var(--pmo-warn); font-size:.78rem; }
+    .view-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; padding-top:.25rem; }
+    .view-row { display:flex; flex-direction:column; gap:.3rem; min-width:0; }
+    .vlabel { font-size:.75rem; text-transform:uppercase; letter-spacing:.03em; color:var(--pmo-muted); }
+    .view-content { margin:0; white-space:pre-wrap; word-break:break-word; font-size:.9rem; }
   `],
 })
 export class WorkItemTasksTabComponent implements OnInit {
@@ -185,6 +224,10 @@ export class WorkItemTasksTabComponent implements OnInit {
   readonly saving = signal(false);
   form: TaskForm = this.emptyForm();
 
+  // read-only detail view, opened by clicking a row
+  readonly viewOpen = signal(false);
+  readonly viewing = signal<WorkItemTask | null>(null);
+
   ngOnInit() { this.load(); }
 
   private emptyForm(): TaskForm {
@@ -210,6 +253,11 @@ export class WorkItemTasksTabComponent implements OnInit {
         },
         error: () => this.loading.set(false),
       });
+  }
+
+  openView(t: WorkItemTask) {
+    this.viewing.set(t);
+    this.viewOpen.set(true);
   }
 
   openCreate() {

@@ -10,6 +10,7 @@ export interface Ticket {
   invested_hours: number;
   resolved_at: string | null;
   created_at: string;
+  is_active?: boolean;
   // solo en el detalle
   description?: string;
   status_logs?: TicketStatusLogRow[];

@@ -18,6 +18,7 @@ export interface Task {
   progress_pct: number;
   assignees?: TaskAssignee[];
   subtask_count?: number;
+  is_active?: boolean;
 }
 
 export interface Milestone {

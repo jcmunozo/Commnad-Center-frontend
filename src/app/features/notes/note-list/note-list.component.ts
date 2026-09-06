@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal, viewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TableModule, TableLazyLoadEvent } from 'primeng/table';
@@ -8,6 +8,7 @@ import { SelectModule } from 'primeng/select';
 import { DialogModule } from 'primeng/dialog';
 import { DatePickerModule } from 'primeng/datepicker';
 import { CheckboxModule } from 'primeng/checkbox';
+import { of, switchMap } from 'rxjs';
 
 import { NoteService } from '../note.service';
 import {
@@ -21,6 +22,7 @@ import { NotificationService } from '../../../core/services/notification.service
 import { ConfirmService } from '../../../core/services/confirm.service';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { LinksPanelComponent } from '../../../shared/components/links-panel/links-panel.component';
+import { ShortCodePipe } from '../../../shared/pipes/short-code.pipe';
 
 function iso(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
@@ -39,7 +41,7 @@ const STATUS_TOGGLE = [
   imports: [
     DatePipe, FormsModule, TableModule, InputTextModule, ButtonModule,
     SelectModule, DialogModule, DatePickerModule,
-    CheckboxModule, StatusBadgeComponent, LinksPanelComponent,
+    CheckboxModule, StatusBadgeComponent, LinksPanelComponent, ShortCodePipe,
   ],
   template: `
     <div class="pmo-toolbar">
@@ -64,34 +66,37 @@ const STATUS_TOGGLE = [
       <ng-template pTemplate="header">
         <tr>
           <th style="width:3rem"></th>
-          <th>Code</th>
+          <th>#</th>
           <th pSortableColumn="title">Title</th>
           <th>Content</th>
           <th>Category</th>
           <th>Priority</th>
           <th>Linked to</th>
           <th pSortableColumn="due_date">Due date</th>
-          <th pSortableColumn="created_at">Created</th>
           <th style="width:8rem"></th>
         </tr>
       </ng-template>
-      <ng-template pTemplate="body" let-n>
-        <tr [class.row--done]="n.status === 'COMPLETED'">
+      <ng-template pTemplate="body" let-n let-rowIndex="rowIndex">
+        <tr class="row--clickable" [class.row--done]="n.status === 'COMPLETED'"
+          [class.row--archived]="n.is_active === false" (click)="openView(n)">
           <td>
             <button type="button" class="icon-btn" [class.pin--on]="n.pinned"
-              [title]="n.pinned ? 'Unpin' : 'Pin'" (click)="togglePin(n)">
+              [title]="n.pinned ? 'Unpin' : 'Pin'" (click)="$event.stopPropagation(); togglePin(n)">
               <i class="pi" [class.pi-bookmark-fill]="n.pinned"
                 [class.pi-bookmark]="!n.pinned"></i></button>
           </td>
-          <td class="note-code">{{ n.legacy_code }}</td>
-          <td>{{ n.title }}</td>
+          <td class="note-code">{{ rowIndex + 1 }}</td>
+          <td>
+            {{ n.title }}
+            @if (n.is_active === false) { <span class="archived-tag">Archived</span> }
+          </td>
           <td class="note-content-cell" [title]="n.content">{{ n.content || '—' }}</td>
           <td><app-status-badge [code]="n.category" [label]="label(categoryOptions, n.category)" /></td>
           <td><app-status-badge [code]="n.priority" [label]="label(priorityOptions, n.priority)" /></td>
           <td>
             @if (n.project_name) { {{ n.project_name }} }
             @else if (n.work_item_title) {
-              <span class="ci-tag" title="Continuous Improvement">{{ n.work_item_title }}</span>
+              <span title="Continuous Improvement">{{ n.work_item_title }}</span>
             } @else { — }
           </td>
           <td>
@@ -104,22 +109,18 @@ const STATUS_TOGGLE = [
               </span>
             } @else { — }
           </td>
-          <td>{{ n.created_at | date:'dd/MM/yyyy' }}</td>
           <td class="row-actions">
-            <button type="button" class="icon-btn"
-              [title]="n.status === 'COMPLETED' ? 'Reopen' : 'Mark as completed'"
-              (click)="toggleStatus(n)">
-              <i class="pi" [class.pi-check-circle]="n.status !== 'COMPLETED'"
-                [class.pi-replay]="n.status === 'COMPLETED'"></i></button>
-            <button type="button" class="icon-btn" title="Edit" (click)="openEdit(n)">
+            <button type="button" class="icon-btn" title="Edit" (click)="$event.stopPropagation(); openEdit(n)">
               <i class="pi pi-pencil"></i></button>
-            <button type="button" class="icon-btn icon-btn--danger" title="Archive"
-              (click)="archive(n)"><i class="pi pi-trash"></i></button>
+            @if (n.is_active !== false) {
+              <button type="button" class="icon-btn icon-btn--danger" title="Archive"
+                (click)="$event.stopPropagation(); archive(n)"><i class="pi pi-trash"></i></button>
+            }
           </td>
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td colspan="9">No notes.</td></tr>
+        <tr><td colspan="8">No notes.</td></tr>
       </ng-template>
     </p-table>
 
@@ -159,18 +160,63 @@ const STATUS_TOGGLE = [
           <p-checkbox [(ngModel)]="formPinned" [binary]="true" inputId="notePinned" />
           <span>Pin this note (shows on the dashboard)</span>
         </label>
-        <label>Links
-          @if (editingId(); as id) {
-            <app-links-panel ownerType="note" [ownerId]="id" />
-          } @else {
-            <small class="hint">Save the note first to add links.</small>
-          }
+        <label class="pin-check">
+          <p-checkbox [(ngModel)]="formCompleted" [binary]="true" inputId="noteCompleted" />
+          <span>Mark as completed</span>
         </label>
+        <div class="field-block">Links
+          <app-links-panel ownerType="note" [ownerId]="editingId()" [singleColumn]="true" />
+        </div>
       </div>
       <ng-template pTemplate="footer">
         <p-button label="Cancel" severity="secondary" (onClick)="dialogOpen.set(false)" />
         <p-button label="Save" [disabled]="!formValid() || saving()"
           [loading]="saving()" (onClick)="save()" />
+      </ng-template>
+    </p-dialog>
+
+    <!-- Read-only detail view: opened by clicking a row, no editing here. -->
+    <p-dialog header="Note details" [visible]="viewOpen()" (visibleChange)="viewOpen.set($event)"
+      [modal]="true" [dismissableMask]="true" [style]="{width:'34rem'}" [draggable]="false">
+      @if (viewing(); as n) {
+        <div class="view-grid">
+          <div class="view-row"><span class="vlabel">#</span><span>{{ n.legacy_code | shortCode }}</span></div>
+          <div class="view-row"><span class="vlabel">Title</span><span>{{ n.title }}</span></div>
+          <div class="view-row span-2">
+            <span class="vlabel">Content</span>
+            <p class="view-content">{{ n.content || '—' }}</p>
+          </div>
+          <div class="view-row">
+            <span class="vlabel">Category</span>
+            <app-status-badge [code]="n.category" [label]="label(categoryOptions, n.category)" />
+          </div>
+          <div class="view-row">
+            <span class="vlabel">Priority</span>
+            <app-status-badge [code]="n.priority" [label]="label(priorityOptions, n.priority)" />
+          </div>
+          <div class="view-row">
+            <span class="vlabel">Linked to</span>
+            <span>
+              @if (n.project_name) { {{ n.project_name }} }
+              @else if (n.work_item_title) { {{ n.work_item_title }} }
+              @else { — }
+            </span>
+          </div>
+          <div class="view-row">
+            <span class="vlabel">Due date</span>
+            <span>{{ n.due_date ? (n.due_date | date:'dd/MM/yyyy') : '—' }}</span>
+          </div>
+          <div class="view-row"><span class="vlabel">Status</span><span>{{ n.status === 'COMPLETED' ? 'Completed' : 'Open' }}</span></div>
+          <div class="view-row"><span class="vlabel">Pinned</span><span>{{ n.pinned ? 'Yes' : 'No' }}</span></div>
+          <div class="view-row"><span class="vlabel">Created</span><span>{{ n.created_at | date:'dd/MM/yyyy HH:mm' }}</span></div>
+          <div class="view-row span-2">
+            <span class="vlabel">Links</span>
+            <app-links-panel ownerType="note" [ownerId]="n.id" [viewOnly]="true" [singleColumn]="true" />
+          </div>
+        </div>
+      }
+      <ng-template pTemplate="footer">
+        <p-button label="Close" severity="secondary" (onClick)="viewOpen.set(false)" />
       </ng-template>
     </p-dialog>
   `,
@@ -179,6 +225,12 @@ const STATUS_TOGGLE = [
     .pmo-toolbar input, .pmo-toolbar p-select { min-width:150px; }
     .note-code { font-variant-numeric:tabular-nums; font-weight:600; }
     .row--done { opacity:.55; }
+    .row--archived { opacity:.6; }
+    .archived-tag { margin-left:.5rem; padding:.05rem .5rem; border-radius:1rem;
+      font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.03em;
+      background:rgba(220,38,38,.12); color:var(--pmo-danger); }
+    .row--clickable { cursor:pointer; }
+    .row--clickable:hover { background:var(--surface-bg); }
     .row-actions { white-space:nowrap; }
     .icon-btn { background:none; border:none; cursor:pointer; color:var(--pmo-muted);
       padding:.25rem .4rem; font-size:.9rem; }
@@ -191,14 +243,16 @@ const STATUS_TOGGLE = [
     .due--overdue { color:var(--pmo-danger); font-weight:600; }
     .due--upcoming { color:#fab219; }
     .dialog-form { display:flex; flex-direction:column; gap:1rem; padding-top:.25rem; }
-    .dialog-form label { display:flex; flex-direction:column; gap:.35rem; font-size:.85rem;
-      color:var(--pmo-muted); }
+    .dialog-form label, .dialog-form .field-block { display:flex; flex-direction:column; gap:.35rem;
+      font-size:.85rem; color:var(--pmo-muted); }
     .field-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
     .pin-check { flex-direction:row !important; align-items:center; gap:.5rem !important; }
     textarea { resize:vertical; font:inherit; }
-    .ci-tag { padding:.1rem .5rem; border-radius:1rem; font-size:.78rem;
-      background:rgba(57,135,229,.15); color:#7db2ec; }
-    .hint { color:var(--pmo-muted); font-size:.8rem; }
+    .view-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; padding-top:.25rem; }
+    .view-row { display:flex; flex-direction:column; gap:.3rem; min-width:0; }
+    .view-row.span-2 { grid-column:span 2; }
+    .vlabel { font-size:.75rem; text-transform:uppercase; letter-spacing:.03em; color:var(--pmo-muted); }
+    .view-content { margin:0; white-space:pre-wrap; word-break:break-word; font-size:.9rem; }
   `],
 })
 export class NoteListComponent implements OnInit {
@@ -207,6 +261,7 @@ export class NoteListComponent implements OnInit {
   private readonly workItemsSvc = inject(WorkItemService);
   private readonly notify = inject(NotificationService);
   private readonly confirm = inject(ConfirmService);
+  private readonly linksPanel = viewChild(LinksPanelComponent);
 
   readonly rows = signal<Note[]>([]);
   readonly total = signal(0);
@@ -242,6 +297,10 @@ export class NoteListComponent implements OnInit {
   readonly dialogOpen = signal(false);
   readonly editingId = signal<string | null>(null);
   readonly saving = signal(false);
+
+  // read-only detail view, opened by clicking a row
+  readonly viewOpen = signal(false);
+  readonly viewing = signal<Note | null>(null);
   formTitle = '';
   formContent = '';
   formCategory = 'TODO';
@@ -250,6 +309,7 @@ export class NoteListComponent implements OnInit {
   /** Composite 'project:<id>' / 'workitem:<id>', parsed into the write body on save(). */
   formLink: string | null = null;
   formPinned = false;
+  formCompleted = false;
 
   ngOnInit() {
     this.reload();
@@ -302,14 +362,6 @@ export class NoteListComponent implements OnInit {
     this.service.update(n.id, { pinned: !n.pinned }).subscribe(() => this.reload());
   }
 
-  toggleStatus(n: Note) {
-    const status = n.status === 'COMPLETED' ? 'OPEN' : 'COMPLETED';
-    this.service.update(n.id, { status }).subscribe(() => {
-      this.notify.success(status === 'COMPLETED' ? 'Note completed' : 'Note reopened');
-      this.reload();
-    });
-  }
-
   formValid() {
     return this.formTitle.trim().length > 0;
   }
@@ -323,7 +375,14 @@ export class NoteListComponent implements OnInit {
     this.formDue = null;
     this.formLink = null;
     this.formPinned = false;
+    this.formCompleted = false;
+    this.linksPanel()?.resetDrafts();
     this.dialogOpen.set(true);
+  }
+
+  openView(n: Note) {
+    this.viewing.set(n);
+    this.viewOpen.set(true);
   }
 
   openEdit(n: Note) {
@@ -335,6 +394,7 @@ export class NoteListComponent implements OnInit {
     this.formDue = n.due_date ? new Date(`${n.due_date}T00:00:00`) : null;
     this.formLink = n.project ? `project:${n.project}` : n.work_item ? `workitem:${n.work_item}` : null;
     this.formPinned = n.pinned;
+    this.formCompleted = n.status === 'COMPLETED';
     this.dialogOpen.set(true);
   }
 
@@ -350,9 +410,12 @@ export class NoteListComponent implements OnInit {
       project: this.formLink?.startsWith('project:') ? this.formLink.slice(8) : null,
       work_item: this.formLink?.startsWith('workitem:') ? this.formLink.slice(9) : null,
       pinned: this.formPinned,
+      status: this.formCompleted ? 'COMPLETED' : 'OPEN',
     };
     const id = this.editingId();
-    const upsert$ = id ? this.service.update(id, body) : this.service.create(body);
+    const upsert$ = (id ? this.service.update(id, body) : this.service.create(body)).pipe(
+      switchMap((n) => this.linksPanel()?.flush(id ?? n.id) ?? of(null)),
+    );
     upsert$.subscribe({
       next: () => {
         this.notify.success(id ? 'Note updated' : 'Note created');

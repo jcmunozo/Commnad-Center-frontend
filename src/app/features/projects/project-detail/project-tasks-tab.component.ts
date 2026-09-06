@@ -19,6 +19,7 @@ import { NotificationService } from '../../../core/services/notification.service
 import { ConfirmService } from '../../../core/services/confirm.service';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { ShortCodePipe } from '../../../shared/pipes/short-code.pipe';
 
 interface TaskForm {
   name: string;
@@ -39,25 +40,25 @@ interface TaskForm {
   imports: [
     DatePipe, DecimalPipe, FormsModule, TableModule, ButtonModule, DialogModule,
     SelectModule, InputTextModule, InputNumberModule, DatePickerModule, TagModule,
-    StatusBadgeComponent,
+    StatusBadgeComponent, ShortCodePipe,
   ],
   template: `
     <div class="tab-toolbar">
-      <input pInputText placeholder="Search tasks…" [ngModel]="searchTerm()"
-        (ngModelChange)="searchTerm.set($event)" />
+      <input pInputText placeholder="Search tasks… (matches archived ones too)" [ngModel]="searchTerm()"
+        (ngModelChange)="onSearch($event)" />
       @if (canWrite()) {
         <span class="spacer"></span>
         <p-button label="New task" icon="pi pi-plus" size="small" (onClick)="openCreate()" />
       }
     </div>
 
-    <p-table [value]="filteredTasks()" [loading]="loading()" [paginator]="filteredTasks().length > 10"
+    <p-table [value]="tasks()" [loading]="loading()" [paginator]="tasks().length > 10"
       [rows]="10" dataKey="id" sortField="planned_end" [sortOrder]="1"
       [expandedRowKeys]="expanded()" (onRowExpand)="loadSubtasks($event.data)">
       <ng-template pTemplate="header">
         <tr>
           <th style="width:2.5rem"></th>
-          <th>Code</th>
+          <th>#</th>
           <th pSortableColumn="name">Name</th>
           <th style="width:4rem">Subtasks</th>
           <th>Type</th>
@@ -69,18 +70,22 @@ interface TaskForm {
           @if (canWrite()) { <th style="width:7rem"></th> }
         </tr>
       </ng-template>
-      <ng-template pTemplate="body" let-t let-expanded="expanded">
-        <tr>
+      <ng-template pTemplate="body" let-t let-expanded="expanded" let-rowIndex="rowIndex">
+        <tr class="row--clickable" [class.row--archived]="t.is_active === false" (click)="openView(t)">
           <td>
             <button type="button" pButton class="p-button-text p-button-rounded subtask-toggle"
               [class.subtask-toggle--active]="t.subtask_count"
-              [pRowToggler]="t" [title]="(t.subtask_count || 0) + ' linked subtask(s)'">
+              [pRowToggler]="t" [title]="(t.subtask_count || 0) + ' linked subtask(s)'"
+              (click)="$event.stopPropagation()">
               <i class="pi" [class.pi-chevron-down]="expanded"
                 [class.pi-chevron-right]="!expanded"></i>
             </button>
           </td>
-          <td>{{ t.legacy_code }}</td>
-          <td>{{ t.name }}</td>
+          <td>{{ rowIndex + 1 }}</td>
+          <td>
+            {{ t.name }}
+            @if (t.is_active === false) { <span class="archived-tag">Archived</span> }
+          </td>
           <td>
             <p-tag [value]="(t.subtask_count || 0).toString()"
               [severity]="t.subtask_count ? 'success' : 'secondary'" styleClass="subtask-tag" />
@@ -90,7 +95,7 @@ interface TaskForm {
             <span>{{ assigneeNames(t) || '—' }}</span>
             @if (canReassign()) {
               <button type="button" class="icon-btn" title="Reassign dev"
-                (click)="openReassign(t)"><i class="pi pi-user-edit"></i></button>
+                (click)="$event.stopPropagation(); openReassign(t)"><i class="pi pi-user-edit"></i></button>
             }
           </td>
           <td><app-status-badge [code]="t.status" [label]="catalogs.label('task-statuses', t.status)" /></td>
@@ -99,10 +104,12 @@ interface TaskForm {
           <td>{{ t.progress_pct * 100 | number:'1.0-0' }}%</td>
           @if (canWrite()) {
             <td class="row-actions">
-              <button type="button" class="icon-btn" title="Edit" (click)="openEdit(t)">
+              <button type="button" class="icon-btn" title="Edit" (click)="$event.stopPropagation(); openEdit(t)">
                 <i class="pi pi-pencil"></i></button>
-              <button type="button" class="icon-btn icon-btn--danger" title="Delete"
-                (click)="remove(t)"><i class="pi pi-trash"></i></button>
+              @if (t.is_active !== false) {
+                <button type="button" class="icon-btn icon-btn--danger" title="Delete"
+                  (click)="$event.stopPropagation(); remove(t)"><i class="pi pi-trash"></i></button>
+              }
             </td>
           }
         </tr>
@@ -200,7 +207,7 @@ interface TaskForm {
       (visibleChange)="reassignOpen.set($event)" [modal]="true" [style]="{width:'26rem'}"
       [draggable]="false">
       @if (reassigning(); as t) {
-        <p class="task-ref">{{ t.legacy_code }} · {{ t.name }}</p>
+        <p class="task-ref">#{{ t.legacy_code | shortCode }} · {{ t.name }}</p>
         <label class="field">New dev *
           <p-select [options]="devs()" optionLabel="name" optionValue="id"
             [(ngModel)]="selectedDev" [filter]="true" placeholder="Select" appendTo="body" />
@@ -216,11 +223,55 @@ interface TaskForm {
           (onClick)="saveReassign()" />
       </ng-template>
     </p-dialog>
+
+    <!-- Read-only detail view: opened by clicking a row, no editing here. -->
+    <p-dialog header="Task details" [visible]="viewOpen()" (visibleChange)="viewOpen.set($event)"
+      [modal]="true" [dismissableMask]="true" [style]="{width:'34rem'}" [draggable]="false">
+      @if (viewing(); as t) {
+        <div class="view-grid">
+          <div class="view-row"><span class="vlabel">#</span><span>{{ t.legacy_code | shortCode }}</span></div>
+          <div class="view-row span-2"><span class="vlabel">Name</span><span>{{ t.name }}</span></div>
+          <div class="view-row"><span class="vlabel">Type</span><span>{{ catalogs.label('task-types', t.task_type) }}</span></div>
+          <div class="view-row"><span class="vlabel">Dev</span><span>{{ assigneeNames(t) || '—' }}</span></div>
+          <div class="view-row">
+            <span class="vlabel">Status</span>
+            <app-status-badge [code]="t.status" [label]="catalogs.label('task-statuses', t.status)" />
+          </div>
+          <div class="view-row">
+            <span class="vlabel">Priority</span>
+            <app-status-badge [code]="t.priority" [label]="catalogs.label('severity-levels', t.priority)" />
+          </div>
+          <div class="view-row">
+            <span class="vlabel">Planned start</span>
+            <span>{{ viewDetail() === null ? 'Loading…' : (viewDetail()!.planned_start ? (viewDetail()!.planned_start | date) : '—') }}</span>
+          </div>
+          <div class="view-row"><span class="vlabel">Planned end</span><span>{{ t.planned_end ? (t.planned_end | date) : '—' }}</span></div>
+          <div class="view-row">
+            <span class="vlabel">Estimated hours</span>
+            <span>{{ viewDetail() === null ? 'Loading…' : (viewDetail()!.estimated_hours ?? '—') }}</span>
+          </div>
+          <div class="view-row"><span class="vlabel">Progress</span><span>{{ t.progress_pct * 100 | number:'1.0-0' }}%</span></div>
+          <div class="view-row span-2">
+            <span class="vlabel">Notes</span>
+            <p class="view-content">{{ viewDetail() === null ? 'Loading…' : (viewDetail()!.notes || '—') }}</p>
+          </div>
+        </div>
+      }
+      <ng-template pTemplate="footer">
+        <p-button label="Close" severity="secondary" (onClick)="viewOpen.set(false)" />
+      </ng-template>
+    </p-dialog>
   `,
   styles: [`
     .tab-toolbar { display:flex; align-items:center; gap:.75rem; margin-bottom:.75rem; }
     .tab-toolbar .spacer { flex:1; }
     .dev-cell, .row-actions { white-space:nowrap; }
+    .row--clickable { cursor:pointer; }
+    .row--clickable:hover { background:var(--surface-bg); }
+    .row--archived { opacity:.6; }
+    .archived-tag { margin-left:.5rem; padding:.05rem .5rem; border-radius:1rem;
+      font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.03em;
+      background:rgba(220,38,38,.12); color:var(--pmo-danger); }
     .icon-btn { background:none; border:none; cursor:pointer; color:var(--pmo-muted);
       padding:.25rem .4rem; font-size:.9rem; }
     .icon-btn:hover { color:var(--pmo-primary); }
@@ -238,6 +289,10 @@ interface TaskForm {
       width:1.6rem !important; height:1.6rem !important; padding:0 !important;
       border-radius:50% !important; line-height:1.6rem !important; text-align:center !important; }
     .expansion-cell { padding:.5rem 1rem; }
+    .view-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; padding-top:.25rem; }
+    .view-row { display:flex; flex-direction:column; gap:.3rem; min-width:0; }
+    .vlabel { font-size:.75rem; text-transform:uppercase; letter-spacing:.03em; color:var(--pmo-muted); }
+    .view-content { margin:0; white-space:pre-wrap; word-break:break-word; font-size:.9rem; }
     .subtask-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.4rem; }
     .subtask-list li { display:flex; align-items:center; gap:.5rem; font-size:.85rem; }
     .dim { color:var(--pmo-muted); }
@@ -263,13 +318,10 @@ export class ProjectTasksTabComponent implements OnInit {
   readonly devs = signal<Employee[]>([]);
   readonly expanded = signal<Record<string, boolean>>({});
 
-  /** Search box above the tab: matches this project's own tasks by name,
-   *  partial/case-insensitive. */
+  /** Search box above the tab: server-side (not just this page's 200 loaded
+   *  tasks), so it also matches archived ones the plain list leaves out. */
   readonly searchTerm = signal('');
-  readonly filteredTasks = computed(() => {
-    const q = this.searchTerm().trim().toLowerCase();
-    return q ? this.tasks().filter((t) => t.name.toLowerCase().includes(q)) : this.tasks();
-  });
+  private searchTimer?: ReturnType<typeof setTimeout>;
 
   readonly subtasksByTask = signal<Record<string, SubTask[]>>({});
 
@@ -286,6 +338,13 @@ export class ProjectTasksTabComponent implements OnInit {
   readonly reassigning = signal<Task | null>(null);
   selectedDev: string | null = null;
 
+  // read-only detail view, opened by clicking a row
+  readonly viewOpen = signal(false);
+  readonly viewing = signal<Task | null>(null);
+  readonly viewDetail = signal<
+    { planned_start: string | null; estimated_hours: number | null; notes: string } | null
+  >(null);
+
   ngOnInit() {
     this.load();
   }
@@ -298,9 +357,18 @@ export class ProjectTasksTabComponent implements OnInit {
     };
   }
 
+  onSearch(term: string) {
+    this.searchTerm.set(term);
+    clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => this.load(), 300);
+  }
+
   load() {
     this.service
-      .list({ project: this.projectId(), page_size: 200, ordering: 'planned_end' })
+      .list({
+        project: this.projectId(), page_size: 200, ordering: 'planned_end',
+        search: this.searchTerm().trim() || undefined,
+      })
       .subscribe({
         next: (page) => {
           this.tasks.set(page.results);
@@ -335,6 +403,23 @@ export class ProjectTasksTabComponent implements OnInit {
     this.form = this.emptyForm();
     this.ensureLookups();
     this.dialogOpen.set(true);
+  }
+
+  openView(t: Task) {
+    this.viewing.set(t);
+    this.viewDetail.set(null);
+    this.viewOpen.set(true);
+    // El list serializer no trae todos los campos: completar con el detalle.
+    this.service.get(t.id).subscribe((detail) => {
+      if (this.viewing()?.id !== t.id) return;
+      const full = detail as unknown as {
+        planned_start: string | null; estimated_hours: number | null; notes: string;
+      };
+      this.viewDetail.set({
+        planned_start: full.planned_start, estimated_hours: full.estimated_hours,
+        notes: full.notes ?? '',
+      });
+    });
   }
 
   openEdit(t: Task) {

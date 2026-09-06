@@ -16,13 +16,14 @@ import { NotificationService } from '../../../core/services/notification.service
 import { ConfirmService } from '../../../core/services/confirm.service';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { ShortCodePipe } from '../../../shared/pipes/short-code.pipe';
 
 @Component({
   selector: 'app-project-subtasks-tab',
   standalone: true,
   imports: [
     DatePipe, FormsModule, TableModule, ButtonModule, DialogModule, SelectModule,
-    InputTextModule, DatePickerModule, StatusBadgeComponent,
+    InputTextModule, DatePickerModule, StatusBadgeComponent, ShortCodePipe,
   ],
   template: `
     @if (canWrite()) {
@@ -36,20 +37,20 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
       [paginator]="subtasks().length > 10" [rows]="10" sortField="due_date" [sortOrder]="1">
       <ng-template pTemplate="header">
         <tr>
-          <th>Code</th>
-          <th>Tarea</th>
+          <th>#</th>
+          <th>Task</th>
           <th>Subtask</th>
           <th>Dev</th>
-          <th pSortableColumn="due_date">Vence</th>
+          <th pSortableColumn="due_date">Due</th>
           <th>Priority</th>
           <th>Status</th>
           @if (canWrite()) { <th style="width:7rem"></th> }
         </tr>
       </ng-template>
-      <ng-template pTemplate="body" let-s>
+      <ng-template pTemplate="body" let-s let-rowIndex="rowIndex">
         <tr>
-          <td>{{ s.legacy_code }}</td>
-          <td class="task-ref">{{ s.task_code ? s.task_code + ' · ' : '' }}{{ s.task_name }}</td>
+          <td>{{ rowIndex + 1 }}</td>
+          <td class="task-ref">{{ s.task_code ? '#' + (s.task_code | shortCode) + ' · ' : '' }}{{ s.task_name }}</td>
           <td class="wrap">{{ s.description }}</td>
           <td>{{ s.assignee_name }}</td>
           <td [class.overdue]="isOverdue(s)">{{ s.due_date | date }}</td>
@@ -80,15 +81,15 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
       (visibleChange)="dialogOpen.set($event)" [modal]="true" [style]="{width:'32rem'}"
       [draggable]="false">
       <div class="form-grid">
-        <label class="span-2">Tarea *
+        <label class="span-2">Task *
           <p-select [options]="tasks()" optionValue="id" [(ngModel)]="form.task"
             [filter]="true" placeholder="Select a task" appendTo="body"
             optionLabel="name">
             <ng-template pTemplate="selectedItem" let-t>
-              {{ t ? (t.legacy_code ? t.legacy_code + ' · ' : '') + t.name : '' }}
+              {{ t ? (t.legacy_code ? '#' + (t.legacy_code | shortCode) + ' · ' : '') + t.name : '' }}
             </ng-template>
             <ng-template pTemplate="item" let-t>
-              {{ (t.legacy_code ? t.legacy_code + ' · ' : '') + t.name }}
+              {{ (t.legacy_code ? '#' + (t.legacy_code | shortCode) + ' · ' : '') + t.name }}
             </ng-template>
           </p-select>
         </label>
@@ -101,7 +102,7 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
             [(ngModel)]="form.assignee" [filter]="true" [showClear]="true"
             placeholder="Unassigned" appendTo="body" />
         </label>
-        <label>Vence
+        <label>Due date
           <p-datepicker [(ngModel)]="form.due_date" dateFormat="yy-mm-dd" [showIcon]="true"
             appendTo="body" />
         </label>

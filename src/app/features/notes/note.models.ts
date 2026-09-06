@@ -16,6 +16,7 @@ export interface Note {
   work_item_code: string | null;
   created_at: string;
   updated_at: string;
+  is_active?: boolean;
 }
 
 export interface NoteWrite {

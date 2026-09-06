@@ -36,14 +36,14 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
     <p-table [value]="milestones()" [loading]="loading()" dataKey="id">
       <ng-template pTemplate="header">
         <tr>
-          <th>Code</th><th>Name</th><th>Target date</th><th>Actual date</th>
+          <th>#</th><th>Name</th><th>Target date</th><th>Actual date</th>
           <th>Owner</th><th>Derived status</th><th>Progress</th>
           @if (canWrite()) { <th style="width:7rem"></th> }
         </tr>
       </ng-template>
-      <ng-template pTemplate="body" let-m>
+      <ng-template pTemplate="body" let-m let-rowIndex="rowIndex">
         <tr>
-          <td>{{ m.legacy_code }}</td>
+          <td>{{ rowIndex + 1 }}</td>
           <td>{{ m.name }}</td>
           <td>{{ m.target_date | date }}</td>
           <td>{{ m.actual_date | date }}</td>

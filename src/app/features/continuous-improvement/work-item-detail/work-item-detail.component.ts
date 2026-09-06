@@ -19,6 +19,7 @@ import { CatalogsService } from '../../../core/services/catalogs.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { BackLinkComponent } from '../../../shared/components/back-link/back-link.component';
 
 /** Detail page for a single Continuous Improvement work item — same
  * list → click-through → tabs pattern as a Project's detail page, with
@@ -30,15 +31,13 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
   imports: [
     DatePipe, RouterLink, FormsModule, TabsModule, ButtonModule, DialogModule, SelectModule,
     InputTextModule, StatusBadgeComponent, WorkItemTasksTabComponent, WorkItemMilestonesTabComponent,
-    LinksPanelComponent,
+    LinksPanelComponent, BackLinkComponent,
   ],
   template: `
     @if (workItem(); as wi) {
       <div class="pmo-toolbar">
-        <a routerLink="/continuous-improvement" class="back-link" title="Back to Continuous Improvement">
-          <i class="pi pi-arrow-left"></i>
-        </a>
-        <h2>{{ wi.legacy_code }} · {{ wi.title }}</h2>
+        <app-back-link to="/continuous-improvement" label="Back to Continuous Improvement" />
+        <h2>{{ wi.title }}</h2>
         <app-status-badge [code]="wi.status" [label]="catalogs.label('project-statuses', wi.status)" />
         <app-status-badge [code]="wi.priority" [label]="catalogs.label('severity-levels', wi.priority)" />
         <span class="spacer"></span>
@@ -56,9 +55,6 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
           <p-tab value="2">Milestones
             @if (milestoneCount() !== null) { <span class="tab-badge">{{ milestoneCount() }}</span> }
           </p-tab>
-          <p-tab value="3">Links
-            @if (linkCount() !== null) { <span class="tab-badge">{{ linkCount() }}</span> }
-          </p-tab>
         </p-tablist>
         <p-tabpanels>
           <p-tabpanel value="0">
@@ -73,15 +69,15 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
               </div>
               <div><dt>Created</dt><dd>{{ wi.created_at | date }}</dd></div>
             </dl>
+
+            <h3 class="links-title">Links</h3>
+            <app-links-panel ownerType="work_item" [ownerId]="wi.id" />
           </p-tabpanel>
           <p-tabpanel value="1">
             <app-work-item-tasks-tab [workItemId]="wi.id" (count)="taskCount.set($event)" />
           </p-tabpanel>
           <p-tabpanel value="2">
             <app-work-item-milestones-tab [workItemId]="wi.id" (count)="milestoneCount.set($event)" />
-          </p-tabpanel>
-          <p-tabpanel value="3">
-            <app-links-panel ownerType="work_item" [ownerId]="wi.id" (count)="linkCount.set($event)" />
           </p-tabpanel>
         </p-tabpanels>
       </p-tabs>
@@ -111,6 +107,9 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
             [(ngModel)]="formProject" [showClear]="true" placeholder="No project — internal work"
             [filter]="true" appendTo="body" />
         </label>
+        <div class="field-block">Links
+          <app-links-panel ownerType="work_item" [ownerId]="id()" [singleColumn]="true" />
+        </div>
       </div>
       <ng-template pTemplate="footer">
         <p-button label="Cancel" severity="secondary" (onClick)="dialogOpen.set(false)" />
@@ -121,19 +120,19 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
   `,
   styles: [`
     .spacer { flex:1; }
-    .back-link { color:var(--pmo-muted); font-size:1rem; }
-    .back-link:hover { color:var(--pmo-primary); }
     .tab-badge { display:inline-block; margin-left:.45rem; min-width:1.4rem; text-align:center;
       padding:.05rem .4rem; border-radius:1rem; font-size:.72rem; font-weight:700;
       background:var(--p-green-500, #22c55e); color:#04220f; }
     .description { margin:1.25rem 0 0; max-width:70ch; color:var(--pmo-muted); }
+    .links-title { margin:1.75rem 0 .75rem; font-size:.8rem; text-transform:uppercase;
+      letter-spacing:.05em; color:var(--pmo-muted); }
     .meta { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:1rem; margin-top:1.5rem; }
     dt { font-size:.75rem; color:var(--pmo-muted); text-transform:uppercase; }
     dd { margin:0; font-weight:600; }
     .dim { font-weight:400; color:var(--pmo-muted); }
     .dialog-form { display:flex; flex-direction:column; gap:1rem; padding-top:.25rem; }
-    .dialog-form label { display:flex; flex-direction:column; gap:.35rem; font-size:.85rem;
-      color:var(--pmo-muted); }
+    .dialog-form label, .dialog-form .field-block { display:flex; flex-direction:column; gap:.35rem;
+      font-size:.85rem; color:var(--pmo-muted); }
     .field-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
     textarea { resize:vertical; font:inherit; }
   `],
@@ -154,7 +153,6 @@ export class WorkItemDetailComponent implements OnInit {
   // Contadores emitidos por cada pestaña al cargar su data (badges del tablist).
   readonly taskCount = signal<number | null>(null);
   readonly milestoneCount = signal<number | null>(null);
-  readonly linkCount = signal<number | null>(null);
 
   readonly canWrite = computed(() =>
     this.auth.hasAnyRole(['PMO Admin', 'Project Manager', 'Team Member']));
