@@ -14,6 +14,7 @@ export interface Task {
   task_type: string;
   status: string;
   priority: string;
+  sprint: string | null;
   planned_end: string | null;
   progress_pct: number;
   assignees?: TaskAssignee[];

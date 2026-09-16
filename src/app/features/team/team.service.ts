@@ -40,10 +40,10 @@ export class TeamService {
   private readonly http = inject(HttpClient);
 
   /**
-   * Rango de sprint seleccionado en /sprint. Vive aquí (no en el componente)
-   * porque este servicio es un singleton `providedIn: 'root'`: al navegar a
-   * otra vista Angular destruye el componente, pero el servicio sigue vivo,
-   * así que la selección persiste hasta que el usuario la cambie a mano.
+   * Rango de sprint seleccionado en /sprint. Vive aquí (no
+   * en el componente) porque este servicio es un singleton `providedIn: 'root'`:
+   * al navegar a otra vista Angular destruye el componente, pero el servicio
+   * sigue vivo, así que la selección persiste hasta que el usuario la cambie a mano.
    */
   readonly period = signal<WorkloadPeriod | null>(null);
   private hydratedFromServer = false;
@@ -70,7 +70,7 @@ export class TeamService {
     );
   }
 
-  /** Sets the sprint range (or clears it with `null`) and persists it server-side. */
+  /** Sets the workload period range (or clears it with `null`) and persists it server-side. */
   setPeriod(period: WorkloadPeriod | null) {
     this.period.set(period);
     this.http.put<WorkloadPeriodDto>(`${environment.apiUrl}/resources/workload-period/`, {

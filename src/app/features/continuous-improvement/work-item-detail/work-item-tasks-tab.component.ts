@@ -8,10 +8,13 @@ import { SelectModule } from 'primeng/select';
 import { InputTextModule } from 'primeng/inputtext';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { DatePickerModule } from 'primeng/datepicker';
+import { CheckboxModule } from 'primeng/checkbox';
 
 import { WorkItemTaskService } from '../work-item.services';
 import { WorkItemTask } from '../work-item.models';
 import { Employee, EmployeeService } from '../../team/employee.service';
+import { SprintService } from '../../sprints/sprint.service';
+import { Sprint } from '../../sprints/sprint.models';
 import { CatalogsService } from '../../../core/services/catalogs.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ConfirmService } from '../../../core/services/confirm.service';
@@ -24,6 +27,7 @@ interface TaskForm {
   assignee: string | null;
   status: string;
   priority: string;
+  sprint: string | null;
   planned_start: Date | null;
   planned_end: Date | null;
   estimated_hours: number | null;
@@ -40,12 +44,19 @@ interface TaskForm {
   standalone: true,
   imports: [
     DatePipe, DecimalPipe, FormsModule, TableModule, ButtonModule, DialogModule, SelectModule,
-    InputTextModule, InputNumberModule, DatePickerModule, StatusBadgeComponent, ShortCodePipe,
+    InputTextModule, InputNumberModule, DatePickerModule, CheckboxModule, StatusBadgeComponent,
+    ShortCodePipe,
   ],
   template: `
     <div class="tab-toolbar">
       <input pInputText placeholder="Search tasks…" [ngModel]="searchTerm()"
         (ngModelChange)="searchTerm.set($event)" />
+      @if (currentSprint(); as s) {
+        <label class="sprint-toggle">
+          <p-checkbox [(ngModel)]="onlyCurrentSprint" [binary]="true" (ngModelChange)="load()" />
+          Current sprint only ({{ s.name }})
+        </label>
+      }
       @if (canWrite()) {
         <span class="spacer"></span>
         <p-button label="New task" icon="pi pi-plus" size="small" (onClick)="openCreate()" />
@@ -56,7 +67,7 @@ interface TaskForm {
       [rows]="10" dataKey="id">
       <ng-template pTemplate="header">
         <tr>
-          <th>#</th><th>Name</th><th>Dev</th><th>Status</th><th>Priority</th>
+          <th>#</th><th>Name</th><th>Dev</th><th>Status</th><th>Priority</th><th>Sprint</th>
           <th>Hours</th><th>Progress</th>
           @if (canWrite()) { <th style="width:6rem"></th> }
         </tr>
@@ -68,6 +79,7 @@ interface TaskForm {
           <td>{{ t.assignee_name || '—' }}</td>
           <td><app-status-badge [code]="t.status" [label]="catalogs.label('task-statuses', t.status)" /></td>
           <td><app-status-badge [code]="t.priority" [label]="catalogs.label('severity-levels', t.priority)" /></td>
+          <td class="dim">{{ sprintName(t.sprint) }}</td>
           <td>{{ t.estimated_hours ?? '—' }}</td>
           <td>{{ t.progress_pct * 100 | number:'1.0-0' }}%</td>
           @if (canWrite()) {
@@ -81,7 +93,7 @@ interface TaskForm {
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td [attr.colspan]="canWrite() ? 8 : 7">
+        <tr><td [attr.colspan]="canWrite() ? 9 : 8">
           {{ searchTerm() ? 'No tasks match “' + searchTerm() + '”.' : 'No tasks yet.' }}
         </td></tr>
       </ng-template>
@@ -106,6 +118,10 @@ interface TaskForm {
         <label>Priority
           <p-select [options]="catalogs.get('severity-levels')" optionLabel="name" optionValue="code"
             [(ngModel)]="form.priority" appendTo="body" />
+        </label>
+        <label>Sprint
+          <p-select [options]="sprints()" optionLabel="name" optionValue="id" [(ngModel)]="form.sprint"
+            [showClear]="true" placeholder="Backlog (no sprint)" appendTo="body" />
         </label>
         <label>Progress %
           <p-inputNumber [(ngModel)]="form.progress" [min]="0" [max]="100" suffix="%" />
@@ -175,6 +191,9 @@ interface TaskForm {
   styles: [`
     .tab-toolbar { display:flex; align-items:center; gap:.75rem; margin-bottom:.75rem; }
     .tab-toolbar .spacer { flex:1; }
+    .sprint-toggle { display:flex; align-items:center; gap:.5rem; font-size:.85rem;
+      color:var(--pmo-muted); white-space:nowrap; }
+    .dim { color:var(--pmo-muted); }
     .row-actions { white-space:nowrap; }
     .row--clickable { cursor:pointer; }
     .row--clickable:hover { background:var(--surface-bg); }
@@ -202,6 +221,7 @@ export class WorkItemTasksTabComponent implements OnInit {
 
   private readonly service = inject(WorkItemTaskService);
   private readonly employees = inject(EmployeeService);
+  private readonly sprintService = inject(SprintService);
   private readonly notify = inject(NotificationService);
   private readonly confirm = inject(ConfirmService);
   private readonly auth = inject(AuthStore);
@@ -211,6 +231,10 @@ export class WorkItemTasksTabComponent implements OnInit {
   readonly loading = signal(true);
   readonly devs = signal<Employee[]>([]);
   readonly searchTerm = signal('');
+
+  readonly currentSprint = this.sprintService.current;
+  readonly sprints = signal<Sprint[]>([]);
+  onlyCurrentSprint = false;
   readonly filteredTasks = computed(() => {
     const q = this.searchTerm().trim().toLowerCase();
     return q ? this.tasks().filter((t) => t.name.toLowerCase().includes(q)) : this.tasks();
@@ -228,12 +252,22 @@ export class WorkItemTasksTabComponent implements OnInit {
   readonly viewOpen = signal(false);
   readonly viewing = signal<WorkItemTask | null>(null);
 
-  ngOnInit() { this.load(); }
+  ngOnInit() {
+    this.sprintService.loadActive().subscribe();
+    this.sprintService.list({ page_size: 100 }).subscribe((page) => this.sprints.set(page.results));
+    this.load();
+  }
 
   private emptyForm(): TaskForm {
     return { name: '', assignee: null, status: 'TODO', priority: 'MEDIUM',
+      sprint: this.currentSprint()?.id ?? null,
       planned_start: null, planned_end: null, estimated_hours: null, actual_hours: null,
       progress: 0, notes: '' };
+  }
+
+  sprintName(id: string | null): string {
+    if (!id) return 'Backlog';
+    return this.sprints().find((s) => s.id === id)?.name ?? '—';
   }
 
   private ensureDevs() {
@@ -244,7 +278,10 @@ export class WorkItemTasksTabComponent implements OnInit {
   }
 
   load() {
-    this.service.list({ work_item: this.workItemId(), page_size: 200, ordering: '-created_at' })
+    this.service.list({
+      work_item: this.workItemId(), page_size: 200, ordering: '-created_at',
+      current_sprint: this.onlyCurrentSprint ? true : undefined,
+    })
       .subscribe({
         next: (p) => {
           this.tasks.set(p.results);
@@ -271,6 +308,7 @@ export class WorkItemTasksTabComponent implements OnInit {
     this.editing.set(t);
     this.ensureDevs();
     this.form = { name: t.name, assignee: t.assignee, status: t.status, priority: t.priority,
+      sprint: t.sprint,
       planned_start: t.planned_start ? new Date(t.planned_start) : null,
       planned_end: t.planned_end ? new Date(t.planned_end) : null,
       estimated_hours: t.estimated_hours, actual_hours: t.actual_hours ?? null,
@@ -284,7 +322,7 @@ export class WorkItemTasksTabComponent implements OnInit {
     this.saving.set(true);
     const body = {
       work_item: this.workItemId(), name: f.name.trim(), assignee: f.assignee,
-      status: f.status, priority: f.priority,
+      status: f.status, priority: f.priority, sprint: f.sprint,
       planned_start: f.planned_start?.toISOString() ?? null,
       planned_end: f.planned_end?.toISOString() ?? null,
       estimated_hours: f.estimated_hours, actual_hours: f.actual_hours,

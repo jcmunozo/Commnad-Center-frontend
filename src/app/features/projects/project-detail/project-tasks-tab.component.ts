@@ -9,11 +9,14 @@ import { InputTextModule } from 'primeng/inputtext';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { DatePickerModule } from 'primeng/datepicker';
 import { TagModule } from 'primeng/tag';
+import { CheckboxModule } from 'primeng/checkbox';
 import { of, switchMap } from 'rxjs';
 
 import { SubTaskService, TaskService } from '../project-related.services';
 import { SubTask, Task } from '../project-related.models';
 import { Employee, EmployeeService } from '../../team/employee.service';
+import { SprintService } from '../../sprints/sprint.service';
+import { Sprint } from '../../sprints/sprint.models';
 import { CatalogsService } from '../../../core/services/catalogs.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ConfirmService } from '../../../core/services/confirm.service';
@@ -26,6 +29,7 @@ interface TaskForm {
   task_type: string;
   status: string;
   priority: string;
+  sprint: string | null;
   planned_start: Date | null;
   planned_end: Date | null;
   estimated_hours: number | null;
@@ -40,12 +44,18 @@ interface TaskForm {
   imports: [
     DatePipe, DecimalPipe, FormsModule, TableModule, ButtonModule, DialogModule,
     SelectModule, InputTextModule, InputNumberModule, DatePickerModule, TagModule,
-    StatusBadgeComponent, ShortCodePipe,
+    CheckboxModule, StatusBadgeComponent, ShortCodePipe,
   ],
   template: `
     <div class="tab-toolbar">
       <input pInputText placeholder="Search tasks… (matches archived ones too)" [ngModel]="searchTerm()"
         (ngModelChange)="onSearch($event)" />
+      @if (currentSprint(); as s) {
+        <label class="sprint-toggle">
+          <p-checkbox [(ngModel)]="onlyCurrentSprint" [binary]="true" (ngModelChange)="load()" />
+          Current sprint only ({{ s.name }})
+        </label>
+      }
       @if (canWrite()) {
         <span class="spacer"></span>
         <p-button label="New task" icon="pi pi-plus" size="small" (onClick)="openCreate()" />
@@ -65,6 +75,7 @@ interface TaskForm {
           <th>Dev</th>
           <th>Status</th>
           <th>Priority</th>
+          <th>Sprint</th>
           <th pSortableColumn="planned_end">Planned end</th>
           <th pSortableColumn="progress_pct">Progress</th>
           @if (canWrite()) { <th style="width:7rem"></th> }
@@ -100,6 +111,7 @@ interface TaskForm {
           </td>
           <td><app-status-badge [code]="t.status" [label]="catalogs.label('task-statuses', t.status)" /></td>
           <td><app-status-badge [code]="t.priority" [label]="catalogs.label('severity-levels', t.priority)" /></td>
+          <td class="dim">{{ sprintName(t.sprint) }}</td>
           <td>{{ t.planned_end | date }}</td>
           <td>{{ t.progress_pct * 100 | number:'1.0-0' }}%</td>
           @if (canWrite()) {
@@ -119,7 +131,7 @@ interface TaskForm {
           <td></td>
           <td></td>
           <td></td>
-          <td [attr.colspan]="canWrite() ? 8 : 7" class="expansion-cell">
+          <td [attr.colspan]="canWrite() ? 9 : 8" class="expansion-cell">
             @if (subtasksByTask()[t.id]; as subs) {
               @if (subs.length) {
                 <ul class="subtask-list">
@@ -142,7 +154,7 @@ interface TaskForm {
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td [attr.colspan]="canWrite() ? 11 : 10">
+        <tr><td [attr.colspan]="canWrite() ? 12 : 11">
           {{ searchTerm() ? 'No tasks match “' + searchTerm() + '”.' : 'This project has no tasks.' }}
         </td></tr>
       </ng-template>
@@ -171,6 +183,10 @@ interface TaskForm {
         <label>Assigned dev
           <p-select [options]="devs()" optionLabel="name" optionValue="id" [(ngModel)]="form.dev"
             [filter]="true" [showClear]="true" placeholder="Unassigned" appendTo="body" />
+        </label>
+        <label>Sprint
+          <p-select [options]="sprints()" optionLabel="name" optionValue="id" [(ngModel)]="form.sprint"
+            [showClear]="true" placeholder="Backlog (no sprint)" appendTo="body" />
         </label>
         <label>Planned start
           <p-datepicker [(ngModel)]="form.planned_start" dateFormat="yy-mm-dd" [showIcon]="true"
@@ -265,6 +281,8 @@ interface TaskForm {
   styles: [`
     .tab-toolbar { display:flex; align-items:center; gap:.75rem; margin-bottom:.75rem; }
     .tab-toolbar .spacer { flex:1; }
+    .sprint-toggle { display:flex; align-items:center; gap:.5rem; font-size:.85rem;
+      color:var(--pmo-muted); white-space:nowrap; }
     .dev-cell, .row-actions { white-space:nowrap; }
     .row--clickable { cursor:pointer; }
     .row--clickable:hover { background:var(--surface-bg); }
@@ -308,6 +326,7 @@ export class ProjectTasksTabComponent implements OnInit {
   private readonly service = inject(TaskService);
   private readonly subtaskService = inject(SubTaskService);
   private readonly employees = inject(EmployeeService);
+  private readonly sprintService = inject(SprintService);
   private readonly notify = inject(NotificationService);
   private readonly confirm = inject(ConfirmService);
   private readonly auth = inject(AuthStore);
@@ -317,6 +336,10 @@ export class ProjectTasksTabComponent implements OnInit {
   readonly loading = signal(true);
   readonly devs = signal<Employee[]>([]);
   readonly expanded = signal<Record<string, boolean>>({});
+
+  readonly currentSprint = this.sprintService.current;
+  readonly sprints = signal<Sprint[]>([]);
+  onlyCurrentSprint = false;
 
   /** Search box above the tab: server-side (not just this page's 200 loaded
    *  tasks), so it also matches archived ones the plain list leaves out. */
@@ -346,15 +369,23 @@ export class ProjectTasksTabComponent implements OnInit {
   >(null);
 
   ngOnInit() {
+    this.sprintService.loadActive().subscribe();
+    this.sprintService.list({ page_size: 100 }).subscribe((page) => this.sprints.set(page.results));
     this.load();
   }
 
   private emptyForm(): TaskForm {
     return {
       name: '', task_type: 'DEV', status: 'TODO', priority: 'MEDIUM',
+      sprint: this.currentSprint()?.id ?? null,
       planned_start: null, planned_end: null, estimated_hours: null, progress: 0,
       dev: null, notes: '',
     };
+  }
+
+  sprintName(id: string | null): string {
+    if (!id) return 'Backlog';
+    return this.sprints().find((s) => s.id === id)?.name ?? '—';
   }
 
   onSearch(term: string) {
@@ -368,6 +399,7 @@ export class ProjectTasksTabComponent implements OnInit {
       .list({
         project: this.projectId(), page_size: 200, ordering: 'planned_end',
         search: this.searchTerm().trim() || undefined,
+        current_sprint: this.onlyCurrentSprint ? true : undefined,
       })
       .subscribe({
         next: (page) => {
@@ -427,6 +459,7 @@ export class ProjectTasksTabComponent implements OnInit {
     this.ensureLookups();
     this.form = {
       name: t.name, task_type: t.task_type, status: t.status, priority: t.priority,
+      sprint: t.sprint,
       planned_start: null, planned_end: t.planned_end ? new Date(t.planned_end) : null,
       estimated_hours: null, progress: Math.round(t.progress_pct * 100),
       dev: t.assignees?.[0]?.id ?? null, notes: '',
@@ -450,7 +483,7 @@ export class ProjectTasksTabComponent implements OnInit {
     this.saving.set(true);
     const body = {
       name: f.name.trim(), project: this.projectId(), task_type: f.task_type,
-      status: f.status, priority: f.priority,
+      status: f.status, priority: f.priority, sprint: f.sprint,
       planned_start: f.planned_start?.toISOString() ?? null,
       planned_end: f.planned_end?.toISOString() ?? null,
       estimated_hours: f.estimated_hours, progress_pct: f.progress / 100,

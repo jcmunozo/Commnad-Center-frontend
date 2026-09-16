@@ -293,7 +293,7 @@ export class TeamComponent implements OnInit {
   });
 
   ngOnInit() {
-    // Restores the sprint range saved server-side (survives a full page
+    // Restores the workload period range saved server-side (survives a full page
     // reload) before the first load, then reloads on every later mount too
     // (loadPersistedPeriod is a no-op after the first call this session).
     this.service.loadPersistedPeriod().subscribe(() => this.reload());

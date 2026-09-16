@@ -37,6 +37,7 @@ export interface WorkItemTask {
   assignee_name?: string | null;
   status: string;
   priority: string;
+  sprint: string | null;
   planned_start?: string | null;
   planned_end: string | null;
   estimated_hours: number | null;
@@ -52,6 +53,7 @@ export interface WorkItemTaskWrite {
   assignee?: string | null;
   status?: string;
   priority?: string;
+  sprint?: string | null;
   planned_start?: string | null;
   planned_end?: string | null;
   estimated_hours?: number | null;

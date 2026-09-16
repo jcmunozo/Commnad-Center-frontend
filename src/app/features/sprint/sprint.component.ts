@@ -1,16 +1,20 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Observable, map } from 'rxjs';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { DatePickerModule } from 'primeng/datepicker';
 import { SelectModule } from 'primeng/select';
 import { InputTextModule } from 'primeng/inputtext';
 import { TableModule } from 'primeng/table';
+import { TagModule } from 'primeng/tag';
 
 import { TeamService } from '../team/team.service';
 import { Holiday, HolidayService } from '../leaves/holiday.service';
 import { MilestoneService, TaskService } from '../projects/project-related.services';
+import { SprintService } from '../sprints/sprint.service';
+import { Sprint, StartNextSprintResult } from '../sprints/sprint.models';
 import { CatalogsService } from '../../core/services/catalogs.service';
 import { NotificationService } from '../../core/services/notification.service';
 import { ConfirmService } from '../../core/services/confirm.service';
@@ -52,7 +56,7 @@ interface DayCell {
   standalone: true,
   imports: [
     DatePipe, FormsModule, ButtonModule, DialogModule, DatePickerModule, SelectModule,
-    InputTextModule, TableModule,
+    InputTextModule, TableModule, TagModule,
   ],
   template: `
     <div class="pmo-toolbar">
@@ -72,10 +76,10 @@ interface DayCell {
         icon="pi pi-calendar" (onClick)="openDialog()" />
     </div>
     <p class="intro">
-      Set the period used to calculate team workload capacity. Task/leave/holiday
-      hours are weighted per working day (9h Mon&ndash;Thu, 6h Fri) and scaled to
-      this range. It applies to the <strong>Team</strong> load column and persists
-      per user across sessions and devices.
+      Set the sprint's date range. It drives team workload capacity (task/leave/holiday
+      hours are weighted per working day &ndash; 9h Mon&ndash;Thu, 6h Fri &ndash; and scaled
+      to this range) and, on save, closes the previous sprint and carries every task that
+      isn't Done/Cancelled into this one &mdash; closed tasks stay behind.
     </p>
 
     @if (service.period(); as p) {
@@ -159,9 +163,33 @@ interface DayCell {
       </aside>
     </div>
 
+    <h3 class="history-title">Sprint history</h3>
+    <p-table [value]="sprintHistory()" [loading]="loadingHistory()" dataKey="id">
+      <ng-template pTemplate="header">
+        <tr><th>Name</th><th>Start</th><th>End</th><th>Status</th><th>Closed at</th></tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-s>
+        <tr>
+          <td>{{ s.name }}</td>
+          <td>{{ s.start_date | date:'MMM d, y' }}</td>
+          <td>{{ s.end_date | date:'MMM d, y' }}</td>
+          <td>
+            <p-tag [value]="s.status" [severity]="s.status === 'ACTIVE' ? 'success' : 'secondary'" />
+          </td>
+          <td>{{ s.closed_at ? (s.closed_at | date:'MMM d, y, h:mm a') : '—' }}</td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr><td colspan="5">No sprints yet — use "Select sprint" above to start the first one.</td></tr>
+      </ng-template>
+    </p-table>
+
     <p-dialog header="Select sprint" [visible]="dialogOpen()" (visibleChange)="dialogOpen.set($event)"
       [modal]="true" [style]="{width:'26rem'}" [draggable]="false">
       <div class="dialog-form">
+        <label>Sprint name *
+          <input pInputText [(ngModel)]="formSprintName" placeholder="Sprint 3" autocomplete="off" />
+        </label>
         <label>Start date *
           <p-datepicker [(ngModel)]="formStart" dateFormat="yy-mm-dd" [showIcon]="true"
             placeholder="Sprint start" appendTo="body" />
@@ -170,11 +198,12 @@ interface DayCell {
           <p-datepicker [(ngModel)]="formEnd" dateFormat="yy-mm-dd" [showIcon]="true"
             [minDate]="formStart" placeholder="Sprint end" appendTo="body" />
         </label>
+        <p class="dialog-hint">Saving closes the current sprint (if any) and starts this one:
+          open tasks carry over automatically, Done/Cancelled tasks stay behind.</p>
       </div>
       <ng-template pTemplate="footer">
         <p-button label="Cancel" severity="secondary" (onClick)="dialogOpen.set(false)" />
-        <p-button label="Save" [disabled]="!formStart || !formEnd || formStart > formEnd"
-          (onClick)="save()" />
+        <p-button label="Save" [disabled]="!canSaveSprint()" [loading]="savingSprint()" (onClick)="save()" />
       </ng-template>
     </p-dialog>
 
@@ -306,6 +335,8 @@ interface DayCell {
     .icon-btn { background:none; border:none; cursor:pointer; color:var(--pmo-muted);
       padding:.35rem; font-size:.95rem; }
     .icon-btn--danger:hover { color:var(--pmo-danger); }
+
+    .history-title { font-size:.95rem; margin:1.75rem 0 .5rem; }
   `],
 })
 export class SprintComponent implements OnInit {
@@ -313,6 +344,7 @@ export class SprintComponent implements OnInit {
   private readonly holidayService = inject(HolidayService);
   private readonly taskService = inject(TaskService);
   private readonly milestoneService = inject(MilestoneService);
+  private readonly sprintService = inject(SprintService);
   private readonly notify = inject(NotificationService);
   private readonly confirm = inject(ConfirmService);
   readonly catalogs = inject(CatalogsService);
@@ -328,8 +360,13 @@ export class SprintComponent implements OnInit {
   readonly periodHolidays = signal<Holiday[]>([]);
 
   readonly dialogOpen = signal(false);
+  formSprintName = '';
   formStart: Date | null = null;
   formEnd: Date | null = null;
+  readonly savingSprint = signal(false);
+
+  readonly sprintHistory = signal<Sprint[]>([]);
+  readonly loadingHistory = signal(true);
 
   readonly holidaysOpen = signal(false);
   readonly holSaving = signal(false);
@@ -352,6 +389,8 @@ export class SprintComponent implements OnInit {
   });
 
   ngOnInit() {
+    this.sprintService.loadActive().subscribe();
+    this.loadSprintHistory();
     // No-op if TeamComponent already hydrated this session; needed when
     // /sprint is the first page visited (e.g. deep link, bookmark).
     this.service.loadPersistedPeriod().subscribe(() => {
@@ -359,6 +398,17 @@ export class SprintComponent implements OnInit {
       if (p) this.monthStart.set(startOfMonth(p.start));
       this.loadHolidays();
       this.loadPeriodHolidays();
+    });
+  }
+
+  private loadSprintHistory() {
+    this.loadingHistory.set(true);
+    this.sprintService.list({ page_size: 100 }).subscribe({
+      next: (page) => {
+        this.sprintHistory.set(page.results);
+        this.loadingHistory.set(false);
+      },
+      error: () => this.loadingHistory.set(false),
     });
   }
 
@@ -497,16 +547,56 @@ export class SprintComponent implements OnInit {
     const p = this.service.period();
     this.formStart = p?.start ?? null;
     this.formEnd = p?.end ?? null;
+    this.formSprintName = `Sprint ${this.sprintHistory().length + 1}`;
     this.dialogOpen.set(true);
   }
 
+  /** Plain method, not `computed()`: the form fields are plain ngModel-bound
+   *  properties, not signals, so a `computed()` would never see them change
+   *  and would cache its first (false) result forever. */
+  canSaveSprint(): boolean {
+    return !!(this.formSprintName.trim() && this.formStart && this.formEnd
+      && this.formStart <= this.formEnd && !this.savingSprint());
+  }
+
+  /** Saving both updates the workload capacity window (as before) and,
+   *  new: closes the current Sprint (if any) and starts one with these
+   *  name/dates, carrying over every task that isn't Done/Cancelled. */
   save() {
-    if (!this.formStart || !this.formEnd || this.formStart > this.formEnd) return;
-    this.service.setPeriod({ start: this.formStart, end: this.formEnd });
-    this.monthStart.set(startOfMonth(this.formStart));
+    if (!this.canSaveSprint()) return;
+    const start = this.formStart!;
+    const end = this.formEnd!;
+
+    this.service.setPeriod({ start, end });
+    this.monthStart.set(startOfMonth(start));
     this.loadHolidays();
     this.loadPeriodHolidays();
-    this.dialogOpen.set(false);
+
+    this.savingSprint.set(true);
+    const payload = { name: this.formSprintName.trim(), start_date: iso(start), end_date: iso(end) };
+    const current = this.sprintService.current();
+    const request: Observable<StartNextSprintResult | null> = current
+      ? this.sprintService.startNext(current.id, payload)
+      : this.sprintService.create(payload).pipe(map(() => null));
+
+    request.subscribe({
+      next: (result) => {
+        this.savingSprint.set(false);
+        this.dialogOpen.set(false);
+        this.loadSprintHistory();
+        if (result) {
+          this.notify.success(
+            `Sprint updated: ${result.carried_over_count} task(s) carried over, `
+            + `${result.closed_count} closed.`);
+        } else {
+          this.notify.success('Sprint started');
+        }
+      },
+      error: (err) => {
+        this.savingSprint.set(false);
+        this.notify.error(err?.error?.detail ?? 'Could not update the sprint');
+      },
+    });
   }
 
   clearPeriod() {
