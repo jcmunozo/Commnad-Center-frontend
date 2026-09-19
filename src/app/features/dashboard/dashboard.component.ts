@@ -1,10 +1,15 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { NgApexchartsModule } from 'ng-apexcharts';
+import { SelectModule } from 'primeng/select';
+import { switchMap } from 'rxjs';
 
 import { DashboardService } from './dashboard.service';
-import { PortfolioAlerts, PortfolioKpis } from './dashboard.models';
+import { BurndownData, PortfolioAlerts, PortfolioKpis, VelocityData } from './dashboard.models';
+import { SprintService } from '../sprints/sprint.service';
+import { Sprint } from '../sprints/sprint.models';
 import { TeamService, WorkloadRow } from '../team/team.service';
 import { NoteService } from '../notes/note.service';
 import { Note, dueState } from '../notes/note.models';
@@ -43,14 +48,23 @@ const AXIS_LABELS = { style: { colors: '#a1a1aa' } };
 const BASE_TOOLTIP = { theme: 'dark' };
 
 /** Identifica cada tarjeta de gráfica para el toggle de vista-tabla. */
-type ChartKey = 'project-status' | 'task-status' | 'progress' | 'load' | 'effort';
+type ChartKey = 'project-status' | 'task-status' | 'progress' | 'load' | 'effort'
+  | 'burndown' | 'velocity' | 'accuracy';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, RouterLink, NgApexchartsModule, KpiCardComponent],
+  imports: [DatePipe, DecimalPipe, FormsModule, RouterLink, NgApexchartsModule, SelectModule, KpiCardComponent],
   template: `
-    <h2>Portfolio dashboard</h2>
+    <div class="page-head">
+      <h2>Portfolio dashboard</h2>
+      <label class="sprint-picker">
+        <span>Sprint</span>
+        <p-select [options]="sprintOptions()" optionLabel="label" optionValue="id"
+          [ngModel]="selectedSprintId()" (ngModelChange)="onSprintChange($event)"
+          [showClear]="true" placeholder="All time" appendTo="body" />
+      </label>
+    </div>
 
     @if (kpis(); as k) {
       <div class="pmo-grid pmo-grid--kpi">
@@ -68,7 +82,7 @@ type ChartKey = 'project-status' | 'task-status' | 'progress' | 'load' | 'effort
       <div class="charts">
         <div class="chart-card" [style.--accent]="blue">
           <div class="chart-head">
-            <h3><i class="pi pi-briefcase"></i> Projects by status</h3>
+            <h3><i class="pi pi-briefcase"></i> Projects by status <span class="chart-sub">all sprints</span></h3>
             @if (projectStatus().labels.length) { <button type="button" class="table-toggle"
               (click)="toggleTable('project-status')" [attr.aria-pressed]="isTable('project-status') ? 'true' : 'false'"
               [attr.title]="isTable('project-status') ? 'Show chart' : 'Show as table'">
@@ -132,7 +146,7 @@ type ChartKey = 'project-status' | 'task-status' | 'progress' | 'load' | 'effort
 
         <div class="chart-card">
           <div class="chart-head">
-            <h3><i class="pi pi-chart-line"></i> Progress by project <span class="chart-sub">color = health</span></h3>
+            <h3><i class="pi pi-chart-line"></i> Progress by project <span class="chart-sub">color = health · all sprints</span></h3>
             @if (progress().labels.length) { <button type="button" class="table-toggle"
               (click)="toggleTable('progress')" [attr.aria-pressed]="isTable('progress') ? 'true' : 'false'"
               [attr.title]="isTable('progress') ? 'Show chart' : 'Show as table'">
@@ -171,7 +185,7 @@ type ChartKey = 'project-status' | 'task-status' | 'progress' | 'load' | 'effort
         @if (workload().length) {
           <div class="chart-card">
             <div class="chart-head">
-              <h3><i class="pi pi-users"></i> Team load <span class="chart-sub">% of weekly capacity</span></h3>
+              <h3><i class="pi pi-users"></i> Team load <span class="chart-sub">% of capacity · selected period</span></h3>
               <button type="button" class="table-toggle"
                 (click)="toggleTable('load')" [attr.aria-pressed]="isTable('load') ? 'true' : 'false'"
                 [attr.title]="isTable('load') ? 'Show chart' : 'Show as table'">
@@ -207,7 +221,7 @@ type ChartKey = 'project-status' | 'task-status' | 'progress' | 'load' | 'effort
         @if (effort().labels.length) {
           <div class="chart-card chart-card--wide" [style.--accent]="blue">
             <div class="chart-head">
-              <h3><i class="pi pi-clock"></i> Estimated vs actual hours <span class="chart-sub">per task</span></h3>
+              <h3><i class="pi pi-clock"></i> Estimated vs actual hours <span class="chart-sub">per task{{ kpis()?.sprint ? ' · ' + kpis()!.sprint!.name : '' }}</span></h3>
               <button type="button" class="table-toggle"
                 (click)="toggleTable('effort')" [attr.aria-pressed]="isTable('effort') ? 'true' : 'false'"
                 [attr.title]="isTable('effort') ? 'Show chart' : 'Show as table'">
@@ -241,6 +255,114 @@ type ChartKey = 'project-status' | 'task-status' | 'progress' | 'load' | 'effort
             </div>
           </div>
         }
+
+        @if (selectedSprintId()) {
+          <div class="chart-card chart-card--wide" [style.--accent]="blue">
+            <div class="chart-head">
+              <h3><i class="pi pi-arrow-down-right"></i> Burndown <span class="chart-sub">remaining estimated hours</span></h3>
+              @if (burndownView().labels.length) { <button type="button" class="table-toggle"
+                (click)="toggleTable('burndown')" [attr.aria-pressed]="isTable('burndown') ? 'true' : 'false'"
+                [attr.title]="isTable('burndown') ? 'Show chart' : 'Show as table'">
+                <i class="pi" [class.pi-table]="!isTable('burndown')" [class.pi-chart-line]="isTable('burndown')"></i>
+              </button> }
+            </div>
+            @if (!burndownView().labels.length) {
+              <p class="chart-empty">No estimated tasks in this sprint yet.</p>
+            } @else if (isTable('burndown')) {
+              <table class="chart-table">
+                <caption class="sr-only">Sprint burndown</caption>
+                <thead><tr><th>Day</th><th>Remaining</th><th>Ideal</th></tr></thead>
+                <tbody>
+                  @for (row of burndownView().rows; track row.label) {
+                    <tr><td>{{ row.label }}</td><td>{{ row.remaining }}h</td><td>{{ row.ideal }}h</td></tr>
+                  }
+                </tbody>
+              </table>
+            } @else {
+              <apx-chart [series]="[
+                  { name: 'Remaining', data: burndownView().remaining },
+                  { name: 'Ideal', data: burndownView().ideal }
+                ]"
+                [chart]="lineChartCfg" [colors]="[blue, neutral]"
+                [stroke]="{ width: [3, 2], dashArray: [0, 5], curve: 'straight' }"
+                [dataLabels]="{ enabled: false }"
+                [xaxis]="{ categories: burndownView().labels, labels: axisLabels }"
+                [yaxis]="{ min: 0, labels: axisLabels }" [grid]="grid"
+                [legend]="{ show: true, position: 'top', labels: { colors: '#a1a1aa' } }"
+                [tooltip]="effortTooltip" />
+            }
+            <div class="viz-legend">
+              <span>Scope is the tasks assigned to the sprint right now, so it changes if tasks are added mid-sprint.
+                Tasks with no completion timestamp count as not done.</span>
+            </div>
+          </div>
+        }
+
+        <div class="chart-card" [style.--accent]="blue">
+          <div class="chart-head">
+            <h3><i class="pi pi-bolt"></i> Velocity <span class="chart-sub">tasks done · last closed sprints</span></h3>
+            @if (velocityView().labels.length) { <button type="button" class="table-toggle"
+              (click)="toggleTable('velocity')" [attr.aria-pressed]="isTable('velocity') ? 'true' : 'false'"
+              [attr.title]="isTable('velocity') ? 'Show chart' : 'Show as table'">
+              <i class="pi" [class.pi-table]="!isTable('velocity')" [class.pi-chart-bar]="isTable('velocity')"></i>
+            </button> }
+          </div>
+          @if (!velocityView().labels.length) {
+            <p class="chart-empty">No closed sprints yet.</p>
+          } @else if (isTable('velocity')) {
+            <table class="chart-table">
+              <caption class="sr-only">Velocity per closed sprint</caption>
+              <thead><tr><th>Sprint</th><th>Tasks done</th><th>Hours done</th></tr></thead>
+              <tbody>
+                @for (row of velocityView().rows; track row.label) {
+                  <tr><td>{{ row.label }}</td><td>{{ row.tasks }}</td><td>{{ row.hours }}h</td></tr>
+                }
+              </tbody>
+            </table>
+          } @else {
+            <apx-chart [series]="[{ name: 'Tasks done', data: velocityView().tasks }]"
+              [chart]="columnChartCfg" [plotOptions]="columnOpts" [colors]="[blue]"
+              [dataLabels]="countLabels" [xaxis]="{ categories: velocityView().labels, labels: axisLabels }"
+              [yaxis]="{ min: 0, forceNiceScale: true, labels: axisLabels }" [grid]="grid"
+              [legend]="{ show: false }" [tooltip]="tooltipBase" />
+          }
+        </div>
+
+        <div class="chart-card" [style.--accent]="blue">
+          <div class="chart-head">
+            <h3><i class="pi pi-bullseye"></i> Estimation accuracy <span class="chart-sub">hours · closed sprints</span></h3>
+            @if (velocityView().labels.length) { <button type="button" class="table-toggle"
+              (click)="toggleTable('accuracy')" [attr.aria-pressed]="isTable('accuracy') ? 'true' : 'false'"
+              [attr.title]="isTable('accuracy') ? 'Show chart' : 'Show as table'">
+              <i class="pi" [class.pi-table]="!isTable('accuracy')" [class.pi-chart-bar]="isTable('accuracy')"></i>
+            </button> }
+          </div>
+          @if (!velocityView().labels.length) {
+            <p class="chart-empty">No closed sprints yet.</p>
+          } @else if (isTable('accuracy')) {
+            <table class="chart-table">
+              <caption class="sr-only">Estimated vs actual hours per closed sprint</caption>
+              <thead><tr><th>Sprint</th><th>Estimated</th><th>Actual</th></tr></thead>
+              <tbody>
+                @for (row of velocityView().rows; track row.label) {
+                  <tr><td>{{ row.label }}</td><td>{{ row.estimated }}h</td><td>{{ row.actual }}h</td></tr>
+                }
+              </tbody>
+            </table>
+          } @else {
+            <apx-chart [series]="[
+                { name: 'Estimated', data: velocityView().estimated },
+                { name: 'Actual', data: velocityView().actual }
+              ]"
+              [chart]="columnChartCfg" [plotOptions]="columnOpts" [colors]="[blue, orange]"
+              [dataLabels]="{ enabled: false }"
+              [xaxis]="{ categories: velocityView().labels, labels: axisLabels }"
+              [yaxis]="{ min: 0, labels: axisLabels }" [grid]="grid"
+              [legend]="{ show: true, position: 'top', labels: { colors: '#a1a1aa' } }"
+              [tooltip]="effortTooltip" />
+          }
+          <div class="viz-legend"><span>Only tasks marked Done in each sprint. Actual = hours logged on those tasks.</span></div>
+        </div>
       </div>
     }
 
@@ -296,6 +418,9 @@ type ChartKey = 'project-status' | 'task-status' | 'progress' | 'load' | 'effort
     }
   `,
   styles: [`
+    .page-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+    .page-head h2 { margin:0; }
+    .sprint-picker { display:flex; align-items:center; gap:.5rem; font-size:.8rem; color:var(--pmo-muted); }
     .charts { margin-top:1.5rem; display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); gap:1.25rem; }
     .chart-card { background:var(--pmo-surface); padding:1rem 1.25rem; border-radius:var(--radius);
       border:1px solid var(--pmo-border); border-top:3px solid var(--accent, var(--pmo-border));
@@ -347,11 +472,20 @@ export class DashboardComponent implements OnInit {
   private readonly team = inject(TeamService);
   private readonly notes = inject(NoteService);
   private readonly catalogs = inject(CatalogsService);
+  private readonly sprints = inject(SprintService);
 
   readonly kpis = signal<PortfolioKpis | null>(null);
   readonly alerts = signal<PortfolioAlerts | null>(null);
   readonly workload = signal<WorkloadRow[]>([]);
   readonly pinnedNotes = signal<Note[]>([]);
+  readonly sprintList = signal<Sprint[]>([]);
+  readonly selectedSprintId = signal<string | null>(null);
+  readonly burndown = signal<BurndownData | null>(null);
+  readonly velocity = signal<VelocityData | null>(null);
+
+  readonly sprintOptions = computed(() => this.sprintList().map((s) => ({
+    id: s.id, label: s.status === 'ACTIVE' ? `${s.name} (active)` : s.name,
+  })));
 
   // Colores enlazados como propiedades de clase (en vez de interpolarlos como texto
   // dentro del template literal) para que el binding sea Angular normal y no un
@@ -419,6 +553,13 @@ export class DashboardComponent implements OnInit {
       },
     }],
   };
+
+  readonly columnOpts = {
+    bar: { horizontal: false, borderRadius: 4, borderRadiusApplication: 'end' as const,
+      columnWidth: '45%' },
+  };
+  readonly lineChartCfg = { type: 'line' as const, height: 300, ...BASE_CHART };
+  readonly columnChartCfg = { type: 'bar' as const, height: 300, ...BASE_CHART };
 
   private roundHours(v: number): number {
     return Math.round(v * 10) / 10;
@@ -490,6 +631,29 @@ export class DashboardComponent implements OnInit {
     };
   });
 
+  readonly burndownView = computed(() => {
+    const days = this.burndown()?.days ?? [];
+    const rows = days.map((d) => ({
+      label: new Date(`${d.date}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
+      remaining: this.roundHours(d.remaining_hours), ideal: this.roundHours(d.ideal_hours),
+    }));
+    return {
+      labels: rows.map((r) => r.label), remaining: rows.map((r) => r.remaining),
+      ideal: rows.map((r) => r.ideal), rows,
+    };
+  });
+
+  readonly velocityView = computed(() => {
+    const rows = (this.velocity()?.sprints ?? []).map((s) => ({
+      label: s.name, tasks: s.tasks_done, hours: this.roundHours(s.hours_done),
+      estimated: this.roundHours(s.estimated_hours), actual: this.roundHours(s.actual_hours),
+    }));
+    return {
+      labels: rows.map((r) => r.label), tasks: rows.map((r) => r.tasks),
+      estimated: rows.map((r) => r.estimated), actual: rows.map((r) => r.actual), rows,
+    };
+  });
+
   chartCfg(rows: number) {
     return { type: 'bar' as const, height: Math.max(160, rows * 44 + 60), ...BASE_CHART };
   }
@@ -498,17 +662,53 @@ export class DashboardComponent implements OnInit {
   }
 
   ngOnInit() {
-    this.service.portfolio().subscribe((k) => this.kpis.set(k));
-    this.service.alerts().subscribe((a) => this.alerts.set(a));
-    // Solo Admin/PM tienen acceso a workload; para otros roles el panel se omite.
-    this.team.workload().subscribe({
-      next: (rows) => this.workload.set(rows),
-      error: () => this.workload.set([]),
+    this.sprints.list({ page_size: 50, ordering: '-start_date' }).subscribe({
+      next: (page) => this.sprintList.set(page.results),
+      error: () => this.sprintList.set([]),
     });
+    // Default to the active sprint; with none, fall back to the all-time view.
+    this.sprints.loadActive().subscribe(() => {
+      this.selectedSprintId.set(this.sprints.current()?.id ?? null);
+      this.reload();
+    });
+    this.service.velocity().subscribe({
+      next: (v) => this.velocity.set(v),
+      error: () => this.velocity.set(null),
+    });
+    // Solo Admin/PM tienen acceso a workload; para otros roles el panel se omite.
+    // El periodo guardado se hidrata primero para que el gráfico coincida con /team.
+    this.team.loadPersistedPeriod()
+      .pipe(switchMap(() => this.team.workload(this.team.period() ?? undefined)))
+      .subscribe({
+        next: (rows) => this.workload.set(rows),
+        error: () => this.workload.set([]),
+      });
     this.notes.list({ pinned: true, status: 'OPEN', page_size: 6, ordering: '-created_at' })
       .subscribe({
         next: (page) => this.pinnedNotes.set(page.results),
         error: () => this.pinnedNotes.set([]),
       });
+  }
+
+  onSprintChange(id: string | null) {
+    this.selectedSprintId.set(id);
+    this.reload();
+  }
+
+  private reload() {
+    const id = this.selectedSprintId();
+    this.service.portfolio(id).subscribe((k) => this.kpis.set(k));
+    this.service.alerts(id).subscribe({
+      next: (a) => this.alerts.set(a),
+      error: () => this.alerts.set(null),
+    });
+    if (id) {
+      this.service.burndown(id).subscribe({
+        next: (b) => this.burndown.set(b),
+        error: () => this.burndown.set(null),
+      });
+    } else {
+      this.burndown.set(null);
+    }
   }
 }

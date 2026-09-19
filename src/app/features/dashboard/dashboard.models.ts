@@ -15,7 +15,26 @@ export interface PortfolioKpis {
     health: string | null;
   }[];
   tasks_effort: TaskEffort[];
+  /** Only present when the request was scoped with ?sprint_id=. */
+  sprint?: { id: string; name: string };
+  sprint_effort_totals?: { estimated_hours: number; actual_hours: number };
 }
+
+export interface BurndownDay { date: string; remaining_hours: number; ideal_hours: number; }
+
+export interface BurndownData {
+  sprint: { id: string; name: string; start_date: string; end_date: string };
+  total_scope_hours: number;
+  days: BurndownDay[];
+}
+
+export interface VelocitySprint {
+  id: string; name: string; start_date: string; end_date: string;
+  tasks_done: number; hours_done: number;
+  estimated_hours: number; actual_hours: number;
+}
+
+export interface VelocityData { sprints: VelocitySprint[]; }
 
 export interface TaskEffort {
   id: string;
