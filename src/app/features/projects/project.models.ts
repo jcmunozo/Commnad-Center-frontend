@@ -42,8 +42,6 @@ export interface Project {
   planned_end: string | null;
   actual_end: string | null;
   progress_pct: number;
-  planned_hours: number | null;
-  consumed_hours: number | null;
   comments: string;
   is_favorite?: boolean;
   is_active: boolean;
@@ -65,8 +63,6 @@ export interface ProjectWrite {
   planned_end?: string | null;
   actual_end?: string | null;
   progress_pct?: number;
-  planned_hours?: number | null;
-  consumed_hours?: number | null;
   comments?: string;
 }
 

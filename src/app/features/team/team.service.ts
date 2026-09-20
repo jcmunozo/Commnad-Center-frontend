@@ -24,6 +24,8 @@ export interface WorkloadRow {
   open_tasks: number;
   ticket_hours: number;
   open_tickets: number;
+  workitem_hours: number;
+  open_workitem_tasks: number;
   on_leave_today: boolean;
   leave_days: number;
   holiday_today: boolean;
