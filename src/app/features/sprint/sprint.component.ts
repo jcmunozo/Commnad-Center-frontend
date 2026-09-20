@@ -14,7 +14,7 @@ import { TeamService } from '../team/team.service';
 import { Holiday, HolidayService } from '../leaves/holiday.service';
 import { MilestoneService, TaskService } from '../projects/project-related.services';
 import { SprintService } from '../sprints/sprint.service';
-import { Sprint, StartNextSprintResult } from '../sprints/sprint.models';
+import { Sprint, SprintDeletionImpact, StartNextSprintResult } from '../sprints/sprint.models';
 import { CatalogsService } from '../../core/services/catalogs.service';
 import { NotificationService } from '../../core/services/notification.service';
 import { ConfirmService } from '../../core/services/confirm.service';
@@ -23,6 +23,15 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 /** The team's actual locations — the Location catalog also holds client-side
  *  countries (Argentina, Spain, ...) that aren't part of the distributed team. */
 const TEAM_LOCATION_CODES = ['COLOMBIA', 'CHILE', 'PHILIPPINES'];
+
+/** Why a sprint is being deleted. The backend stores the final text (max 90 chars) in the
+ *  sprint's history, so the details field is capped to what's left after the cause. */
+const DELETE_CAUSES = [
+  'Created by mistake', 'Wrong name or dates', 'Duplicate sprint',
+  'Sprint never started', 'Other',
+];
+const DELETE_REASON_MAX = 90;
+const DELETE_OTHER = 'Other';
 
 function iso(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
@@ -166,7 +175,7 @@ interface DayCell {
     <h3 class="history-title">Sprint history</h3>
     <p-table [value]="sprintHistory()" [loading]="loadingHistory()" dataKey="id">
       <ng-template pTemplate="header">
-        <tr><th>Name</th><th>Start</th><th>End</th><th>Status</th><th>Closed at</th></tr>
+        <tr><th>Name</th><th>Start</th><th>End</th><th>Status</th><th>Closed at</th><th style="width:3.5rem"></th></tr>
       </ng-template>
       <ng-template pTemplate="body" let-s>
         <tr>
@@ -177,10 +186,14 @@ interface DayCell {
             <p-tag [value]="s.status" [severity]="s.status === 'ACTIVE' ? 'success' : 'secondary'" />
           </td>
           <td>{{ s.closed_at ? (s.closed_at | date:'MMM d, y, h:mm a') : '—' }}</td>
+          <td>
+            <button type="button" class="icon-btn icon-btn--danger" title="Delete sprint"
+              (click)="openDelete(s)"><i class="pi pi-trash"></i></button>
+          </td>
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td colspan="5">No sprints yet — use "Select sprint" above to start the first one.</td></tr>
+        <tr><td colspan="6">No sprints yet — use "Select sprint" above to start the first one.</td></tr>
       </ng-template>
     </p-table>
 
@@ -204,6 +217,57 @@ interface DayCell {
       <ng-template pTemplate="footer">
         <p-button label="Cancel" severity="secondary" (onClick)="dialogOpen.set(false)" />
         <p-button label="Save" [disabled]="!canSaveSprint()" [loading]="savingSprint()" (onClick)="save()" />
+      </ng-template>
+    </p-dialog>
+
+    <p-dialog header="Delete sprint" [visible]="deleteOpen()" (visibleChange)="closeDelete($event)"
+      [modal]="true" [style]="{width:'30rem', maxWidth:'92vw'}" [draggable]="false">
+      @if (deleting(); as s) {
+        <div class="delete-summary">
+          <i class="pi pi-exclamation-triangle"></i>
+          <div>
+            <strong>{{ s.name }}</strong>
+            <span>{{ s.start_date | date:'MMM d' }} – {{ s.end_date | date:'MMM d, y' }} ·
+              {{ s.status }}</span>
+          </div>
+        </div>
+
+        <ul class="delete-impact">
+          @if (impact(); as i) {
+            @if (i.tasks + i.ci_tasks === 0) {
+              <li>No tasks are linked to this sprint.</li>
+            } @else {
+              <li><strong>{{ i.tasks }}</strong> task(s) ({{ i.open_tasks }} open) and
+                <strong>{{ i.ci_tasks }}</strong> Continuous Improvement task(s)
+                ({{ i.open_ci_tasks }} open) will be left <strong>without a sprint</strong>.
+                The tasks themselves are not deleted.</li>
+            }
+            @if (i.is_active_sprint) {
+              <li>This is the <strong>active sprint</strong>: there will be no active sprint
+                until you start a new one.</li>
+            }
+          } @else {
+            <li class="dim">Checking linked tasks…</li>
+          }
+          <li>The sprint disappears from the history and the dashboard. The reason below is
+            kept in its audit history.</li>
+        </ul>
+
+        <div class="dialog-form">
+          <label>Cause *
+            <p-select [options]="deleteCauses" [(ngModel)]="deleteCause"
+              placeholder="Why are you deleting it?" appendTo="body" />
+          </label>
+          <label>Details {{ deleteCause === otherCause ? '*' : '(optional)' }}
+            <input pInputText [(ngModel)]="deleteDetails" [maxLength]="detailsMax()"
+              placeholder="e.g. dates typed for the wrong month" autocomplete="off" />
+          </label>
+        </div>
+      }
+      <ng-template pTemplate="footer">
+        <p-button label="Cancel" severity="secondary" (onClick)="closeDelete(false)" />
+        <p-button label="Delete sprint" icon="pi pi-trash" severity="danger"
+          [disabled]="!canDelete()" [loading]="deletingBusy()" (onClick)="confirmDelete()" />
       </ng-template>
     </p-dialog>
 
@@ -317,6 +381,15 @@ interface DayCell {
     .dialog-form label { display:flex; flex-direction:column; gap:.35rem; font-size:.85rem;
       color:var(--pmo-muted); }
 
+    .delete-summary { display:flex; gap:.75rem; align-items:center; padding:.75rem 1rem;
+      border:1px solid rgba(248,113,113,.4); background:rgba(220,38,38,.1);
+      border-radius:var(--radius); margin-bottom:1rem; }
+    .delete-summary > i { color:var(--pmo-danger); font-size:1.25rem; }
+    .delete-summary div { display:flex; flex-direction:column; gap:.15rem; }
+    .delete-summary span { color:var(--pmo-muted); font-size:.82rem; }
+    .delete-impact { margin:0 0 1rem; padding-left:1.1rem; font-size:.85rem; line-height:1.5;
+      display:flex; flex-direction:column; gap:.4rem; }
+    .dim { color:var(--pmo-muted); }
     .dialog-hint { color:var(--pmo-muted); font-size:.82rem; margin:.25rem 0 1rem; }
     .holiday-form { display:grid;
       grid-template-columns:minmax(7.5rem,9rem) minmax(7.5rem,9.5rem) minmax(0,1fr) auto;
@@ -368,6 +441,15 @@ export class SprintComponent implements OnInit {
   readonly sprintHistory = signal<Sprint[]>([]);
   readonly loadingHistory = signal(true);
 
+  readonly deleteCauses = DELETE_CAUSES;
+  readonly otherCause = DELETE_OTHER;
+  readonly deleteOpen = signal(false);
+  readonly deleting = signal<Sprint | null>(null);
+  readonly impact = signal<SprintDeletionImpact | null>(null);
+  readonly deletingBusy = signal(false);
+  deleteCause: string | null = null;
+  deleteDetails = '';
+
   readonly holidaysOpen = signal(false);
   readonly holSaving = signal(false);
   holDate: Date | null = null;
@@ -398,6 +480,67 @@ export class SprintComponent implements OnInit {
       if (p) this.monthStart.set(startOfMonth(p.start));
       this.loadHolidays();
       this.loadPeriodHolidays();
+    });
+  }
+
+  /** Final text sent to the backend: "<cause>: <details>" (details optional except for Other). */
+  deleteReason(): string {
+    const details = this.deleteDetails.trim();
+    return details ? `${this.deleteCause}: ${details}` : (this.deleteCause ?? '');
+  }
+
+  /** Room left for details so cause + ": " + details fits the backend's 90 chars. */
+  detailsMax(): number {
+    return Math.max(0, DELETE_REASON_MAX - (this.deleteCause?.length ?? 0) - 2);
+  }
+
+  /** Plain method for the same reason as canSaveSprint(): the fields are ngModel-bound
+   *  properties, not signals. */
+  canDelete(): boolean {
+    if (!this.deleteCause || this.deletingBusy()) return false;
+    return this.deleteCause !== DELETE_OTHER || this.deleteDetails.trim().length >= 5;
+  }
+
+  openDelete(sprint: Sprint) {
+    this.deleting.set(sprint);
+    this.impact.set(null);
+    this.deleteCause = null;
+    this.deleteDetails = '';
+    this.deleteOpen.set(true);
+    this.sprintService.deletionImpact(sprint.id).subscribe({
+      next: (i) => this.impact.set(i),
+      error: () => this.impact.set({ tasks: 0, open_tasks: 0, ci_tasks: 0, open_ci_tasks: 0,
+        is_active_sprint: sprint.status === 'ACTIVE' }),
+    });
+  }
+
+  closeDelete(open: boolean) {
+    if (!open && !this.deletingBusy()) this.deleteOpen.set(false);
+  }
+
+  confirmDelete() {
+    const sprint = this.deleting();
+    if (!sprint || !this.canDelete()) return;
+    this.deletingBusy.set(true);
+    this.sprintService.removeWithReason(sprint.id, this.deleteReason()).subscribe({
+      next: (result) => {
+        this.deletingBusy.set(false);
+        this.deleteOpen.set(false);
+        // The saved workload range came from this sprint's dates: drop it so capacity
+        // doesn't keep using dates from a sprint that no longer exists.
+        const p = this.service.period();
+        if (result.was_active && p && iso(p.start) === sprint.start_date
+            && iso(p.end) === sprint.end_date) {
+          this.service.setPeriod(null);
+          this.loadPeriodHolidays();
+        }
+        this.loadSprintHistory();
+        const n = result.detached_tasks + result.detached_ci_tasks;
+        this.notify.success(`Sprint "${sprint.name}" deleted`,
+          n ? `${n} task(s) left without a sprint.` : undefined);
+      },
+      // The error interceptor already toasts the API message.
+      error: () => this.deletingBusy.set(false),
     });
   }
 

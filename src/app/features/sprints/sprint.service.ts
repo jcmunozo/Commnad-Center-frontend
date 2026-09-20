@@ -2,7 +2,9 @@ import { Injectable, signal } from '@angular/core';
 import { Observable, catchError, map, of, tap } from 'rxjs';
 
 import { ApiBaseService } from '../../core/services/api-base.service';
-import { Sprint, SprintWrite, StartNextSprintResult } from './sprint.models';
+import {
+  Sprint, SprintDeletionImpact, SprintDeletionResult, SprintWrite, StartNextSprintResult,
+} from './sprint.models';
 
 @Injectable({ providedIn: 'root' })
 export class SprintService extends ApiBaseService<Sprint, SprintWrite> {
@@ -35,6 +37,21 @@ export class SprintService extends ApiBaseService<Sprint, SprintWrite> {
   startNext(id: string, payload: SprintWrite) {
     return this.http.post<StartNextSprintResult>(`${this.url}/${id}/start_next/`, payload).pipe(
       tap((result) => this.current.set(result.sprint)),
+    );
+  }
+
+  deletionImpact(id: string) {
+    return this.http.get<SprintDeletionImpact>(`${this.url}/${id}/deletion_impact/`);
+  }
+
+  /** Deletes a sprint created by mistake; the backend requires a reason. */
+  removeWithReason(id: string, reason: string) {
+    return this.http.request<SprintDeletionResult>('DELETE', `${this.url}/${id}/`, {
+      body: { reason },
+    }).pipe(
+      tap((result) => {
+        if (result.was_active) this.current.set(null);
+      }),
     );
   }
 
