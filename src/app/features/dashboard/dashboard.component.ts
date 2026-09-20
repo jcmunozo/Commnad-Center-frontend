@@ -29,6 +29,12 @@ const NEUTRAL = '#898781';
 const CHROME_BASELINE = '#383835';
 const CHROME_INK_SECONDARY = '#c3c2b7';
 
+// Categórica (dataviz palette.md, pasos oscuros, validada sobre #18181b): un slot fijo
+// por estado del catálogo, para que un filtro nunca repinte a los demás.
+const CATEGORICAL = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
+const SURFACE = '#18181b';
+const DONUT_MAX_SEGMENTS = 6;
+
 const HEALTH_COLOR: Record<string, string> = { GREEN: GOOD, YELLOW: WARNING, RED: CRITICAL };
 const HEALTH_LABEL: Record<string, string> = { GREEN: 'Green', YELLOW: 'Yellow', RED: 'Red' };
 const LOAD_COLOR: Record<WorkloadRow['alert'], string> = {
@@ -103,12 +109,10 @@ type ChartKey = 'project-status' | 'task-status' | 'progress' | 'load' | 'effort
               </tbody>
             </table>
           } @else {
-            <apx-chart [series]="[{ name: 'Projects', data: projectStatus().counts }]"
-              [chart]="chartCfg(projectStatus().labels.length)"
-              [plotOptions]="barOpts" [colors]="[blue]"
-              [dataLabels]="countLabels" [xaxis]="{ categories: projectStatus().labels, labels: axisLabels }"
-              [yaxis]="{ labels: axisLabels }" [grid]="grid" [legend]="{ show: false }"
-              [tooltip]="tooltipBase" />
+            <apx-chart [series]="projectStatus().donut.values" [labels]="projectStatus().donut.labels"
+              [chart]="donutChartCfg" [colors]="projectStatus().donut.colors"
+              [plotOptions]="donutOpts" [stroke]="donutStroke" [dataLabels]="{ enabled: false }"
+              [legend]="donutLegend" [tooltip]="tooltipBase" />
           }
         </div>
 
@@ -135,12 +139,10 @@ type ChartKey = 'project-status' | 'task-status' | 'progress' | 'load' | 'effort
               </tbody>
             </table>
           } @else {
-            <apx-chart [series]="[{ name: 'Tasks', data: taskStatus().counts }]"
-              [chart]="chartCfg(taskStatus().labels.length)"
-              [plotOptions]="barOpts" [colors]="[blue]"
-              [dataLabels]="countLabels" [xaxis]="{ categories: taskStatus().labels, labels: axisLabels }"
-              [yaxis]="{ labels: axisLabels }" [grid]="grid" [legend]="{ show: false }"
-              [tooltip]="tooltipBase" />
+            <apx-chart [series]="taskStatus().donut.values" [labels]="taskStatus().donut.labels"
+              [chart]="donutChartCfg" [colors]="taskStatus().donut.colors"
+              [plotOptions]="donutOpts" [stroke]="donutStroke" [dataLabels]="{ enabled: false }"
+              [legend]="donutLegend" [tooltip]="tooltipBase" />
           }
         </div>
 
@@ -283,8 +285,9 @@ type ChartKey = 'project-status' | 'task-status' | 'progress' | 'load' | 'effort
                   { name: 'Remaining', data: burndownView().remaining },
                   { name: 'Ideal', data: burndownView().ideal }
                 ]"
-                [chart]="lineChartCfg" [colors]="[blue, neutral]"
-                [stroke]="{ width: [3, 2], dashArray: [0, 5], curve: 'straight' }"
+                [chart]="areaChartCfg" [colors]="[blue, neutral]"
+                [fill]="burndownFill"
+                [stroke]="{ width: [3, 2], dashArray: [0, 5], curve: 'smooth' }"
                 [dataLabels]="{ enabled: false }"
                 [xaxis]="{ categories: burndownView().labels, labels: axisLabels }"
                 [yaxis]="{ min: 0, labels: axisLabels }" [grid]="grid"
@@ -558,7 +561,37 @@ export class DashboardComponent implements OnInit {
     bar: { horizontal: false, borderRadius: 4, borderRadiusApplication: 'end' as const,
       columnWidth: '45%' },
   };
-  readonly lineChartCfg = { type: 'line' as const, height: 300, ...BASE_CHART };
+  readonly areaChartCfg = { type: 'area' as const, height: 300, ...BASE_CHART };
+  // Degradado solo en "Remaining"; la línea ideal queda sin relleno.
+  readonly burndownFill = {
+    type: ['gradient', 'solid'],
+    gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 95, 100] },
+    opacity: [1, 0],
+  };
+  readonly donutChartCfg = { type: 'donut' as const, height: 320, ...BASE_CHART };
+  // Hueco de 2px del color de la superficie entre segmentos (marks-and-anatomy).
+  readonly donutStroke = { width: 2, colors: [SURFACE] };
+  readonly donutOpts = {
+    pie: {
+      donut: {
+        size: '70%',
+        labels: {
+          show: true,
+          name: { show: true, color: '#a1a1aa', fontSize: '12px' },
+          value: { show: true, color: '#e4e4e7', fontSize: '30px', fontWeight: 600 },
+          total: { show: true, showAlways: true, label: 'Total', color: '#a1a1aa', fontSize: '12px',
+            formatter: (w: any) => String(w.globals.seriesTotals.reduce((a: number, b: number) => a + b, 0)) },
+        },
+      },
+    },
+  };
+  // Leyenda siempre visible con el conteo: la identidad nunca depende solo del color.
+  readonly donutLegend = {
+    show: true, position: 'bottom' as const, fontSize: '12px',
+    labels: { colors: '#c3c2b7' },
+    markers: { strokeWidth: 0, offsetX: -2 },
+    formatter: (name: string, o: any) => `${name} · ${o.w.globals.series[o.seriesIndex]}`,
+  };
   readonly columnChartCfg = { type: 'bar' as const, height: 300, ...BASE_CHART };
 
   private roundHours(v: number): number {
@@ -577,12 +610,29 @@ export class DashboardComponent implements OnInit {
     this.tableView.set(next);
   }
 
-  /** Ordena un conteo {code: n} según el orden del catálogo y lo etiqueta. */
+  /** Ordena un conteo {code: n} según el orden del catálogo y lo etiqueta.
+   *  Cada estado conserva su color por posición en el catálogo (no por ranking). El
+   *  `donut` pliega los segmentos más pequeños en "Other" si superan el máximo legible. */
   private ordered(counts: Record<string, number>, slug: 'project-statuses' | 'task-statuses') {
     const rows = this.catalogs.get(slug)
-      .filter((c) => counts[c.code] !== undefined)
-      .map((c) => ({ label: c.name, count: counts[c.code] }));
-    return { labels: rows.map((r) => r.label), counts: rows.map((r) => r.count), rows };
+      .map((c, i) => ({ code: c.code, label: c.name, count: counts[c.code], color: CATEGORICAL[i % CATEGORICAL.length] }))
+      .filter((r) => r.count !== undefined);
+
+    let segments = rows;
+    if (rows.length > DONUT_MAX_SEGMENTS) {
+      const keep = new Set([...rows].sort((a, b) => b.count - a.count)
+        .slice(0, DONUT_MAX_SEGMENTS - 1).map((r) => r.code));
+      const kept = rows.filter((r) => keep.has(r.code));
+      const otherCount = rows.filter((r) => !keep.has(r.code)).reduce((n, r) => n + r.count, 0);
+      segments = [...kept, { code: 'OTHER', label: 'Other', count: otherCount, color: NEUTRAL }];
+    }
+    return {
+      labels: rows.map((r) => r.label), counts: rows.map((r) => r.count), rows,
+      donut: {
+        labels: segments.map((r) => r.label), values: segments.map((r) => r.count),
+        colors: segments.map((r) => r.color),
+      },
+    };
   }
 
   readonly projectStatus = computed(() =>
