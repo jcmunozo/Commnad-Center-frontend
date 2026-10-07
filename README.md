@@ -1,6 +1,6 @@
 # PMO Command Center — Frontend
 
-This is an Angular 20 (standalone + signals) SPA for the PMO Command Center. Consumes the
+An Angular 20 (standalone + signals) SPA for the PMO Command Center. Consumes the
 Django REST API (see `../pmo-backend`). Full architecture in
 `../docs/PROJECT_DOCUMENTATION.md` §7.
 
