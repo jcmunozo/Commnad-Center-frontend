@@ -4,7 +4,7 @@ WORKDIR /app
 # Copy .npmrc BEFORE install so legacy-peer-deps applies during dependency resolution.
 COPY package*.json .npmrc ./
 # Use `npm ci` when a package-lock.json exists (reproducible); fall back to
-# `npm install` on first build when the lockfile hasn't been generated yet.
+# `npm install` on first build when the lockfile hasn't been generated yet. yet
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 COPY . .
 RUN npm run build
